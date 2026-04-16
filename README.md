@@ -1,6 +1,60 @@
-# OpenSKILL
+# OpenSKILL - Standalone SKILL Interpreter, REPL, IDE, and Offline API Finder for EDA
 
-OpenSKILL is an independent SKILL learning workbench with a local interpreter, REPL, desktop shell, and offline API Finder. It is aimed at **core language learning and scripting**, not Cadence database or layout automation.
+OpenSKILL lets you write SKILL code, run it, and look up commands on your own computer without needing Cadence installed.
+
+It is a **standalone SKILL interpreter, REPL, desktop IDE, and offline API Finder** for EDA engineers, custom IC teams, students, and learners who want a simple Cadence-free SKILL workbench on Linux or Windows.
+
+If you are searching for a **SKILL interpreter**, **SKILL REPL**, **offline SKILL reference**, or a **Cadence-free SKILL learning environment**, this repository is built for that use case.
+
+## Quick start
+
+### Fastest way
+
+1. Download the latest build from **GitHub Releases**: <https://github.com/sohamxda7/openskill/releases>
+2. Run the binary for your platform:
+   - **Linux CLI:** `./openskill-<version>-linux`
+   - **Windows CLI:** `openskill-<version>-windows.exe`
+   - **Linux IDE:** `./openskill-ide-<version>-linux`
+   - **Windows IDE:** `openskill-ide-<version>-windows.exe`
+3. Start typing SKILL code.
+
+### From source
+
+```bash
+python -m venv .venv
+. .venv/bin/activate
+python -m pip install -U pip
+python -m pip install -e .
+openskill
+```
+
+Run a script:
+
+```bash
+openskill examples/hello.il
+```
+
+## Why EDA users care
+
+- Run core SKILL scripts locally without a Cadence license checkout
+- Learn SKILL syntax, control flow, list processing, macros, and file I/O in one place
+- Search an offline API catalog while you code
+- Download single-file CLI and IDE binaries from GitHub Releases
+- Use it as a teaching, experimentation, and scripting workbench for custom IC and EDA workflows
+
+## Releases
+
+Prebuilt binaries are published on **GitHub Releases** for **Linux** and **Windows**:
+
+- **CLI:** `openskill-<version>-linux` / `openskill-<version>-windows.exe`
+- **Desktop IDE:** `openskill-ide-<version>-linux` / `openskill-ide-<version>-windows.exe`
+- **Integrity file:** `SHA256SUMS.txt`
+
+Download the latest release here:
+
+<https://github.com/sohamxda7/openskill/releases>
+
+Each push to `main` creates a new prerelease snapshot with commit-based versioning, and version tags create stable releases.
 
 ## License
 
@@ -8,7 +62,7 @@ This project is distributed under **GPL-3.0-or-later**. See `LICENSE` for the fu
 
 ## What it supports
 
-- Reader, parser, and evaluator for a partial core SKILL-style subset
+- Reader, parser, and evaluator for a growing standalone-safe core SKILL surface
 - File execution with `load("script.il")`
 - REPL and command-line runner
 - Offline API catalog for the commands currently implemented
@@ -20,7 +74,7 @@ This project is distributed under **GPL-3.0-or-later**. See `LICENSE` for the fu
 - Cadence UI automation and live-session integration
 - Any network dependency for help lookup
 
-OpenSKILL is **not** a full core-SKILL-complete environment yet.
+OpenSKILL is **not** a full core-SKILL-complete environment yet, but it already covers a broad standalone-safe subset with **200+ documented commands/forms** in the offline catalog.
 
 ## Documentation provenance
 
@@ -48,38 +102,10 @@ scripts/         Packaging helpers
 
 ## Getting started
 
-### 1. Create a virtual environment
-
-```bash
-python -m venv .venv
-. .venv/bin/activate
-python -m pip install -U pip
-```
-
-### 2. Install the project
-
-```bash
-python -m pip install -e .
-```
-
-With packaging tools:
+Need the build tools too?
 
 ```bash
 python -m pip install -e .[build]
-```
-
-### 3. Run it
-
-Start the REPL:
-
-```bash
-openskill
-```
-
-Run a script:
-
-```bash
-openskill examples/hello.il
 ```
 
 Try the desktop shell:
@@ -103,12 +129,12 @@ openskill --gui
 The current implementation focuses on:
 - literals: numbers, strings, symbols, lists
 - quoting: quote / quasiquote / unquote / splice
-- flow control: `if`, `when`, `unless`, `case`, `while`, `for`, `foreach`
-- scoping and definition: `let`, `setq`, `lambda`, `procedure`, `progn`
-- core utilities: arithmetic, comparison, list operations, predicates, printing, `load`, `assoc`, `mapcar`, `boundp`
+- flow control: `if`, `when`, `unless`, `case`, `caseq`, `cond`, `catch`, `throw`, `while`, `for`, `foreach`, `prog`
+- scoping and definition: `let`, `setq`, `lambda`, `procedure`, `defun`, `defmacro`, `progn`
+- core utilities: arithmetic, comparison, list operations, predicates, property lists, macros, string search helpers, regex helpers, printing, file/port I/O, arrays, tables, `load`, mapping helpers, and symbol/meta helpers
 - runtime model: classic-style dynamic bindings, with `nil` treated as false and as the empty list
 
-Current implementation is **partial** and does not yet cover the full core command surface described in the SKILL references.
+Current implementation is still **partial** relative to the full reference surface, but it is already useful for SKILL language learning, offline experimentation, and standalone scripting.
 
 ## Packaging
 

@@ -108,10 +108,18 @@ class EvaluatorTests(unittest.TestCase):
         self.assertEqual(session.eval_text("count"), 5)
         self.assertEqual(session.eval_text("(eval '(+ 1 2 3))"), 6)
         self.assertEqual(session.eval_text("(funcall + 1 2 3 4)"), 10)
+        self.assertEqual(session.eval_text("(progn (setq ?x 5) (+ ?x 1))"), 6)
+        self.assertEqual(format_value(session.eval_text("(progn (setq ?x 5) (list ?x))")), "(5)")
 
     def test_string_and_numeric_helpers(self):
         session = SkillSession()
         self.assertEqual(session.eval_text('(sprintf "v=%d" 7)'), "v=7")
+        self.assertEqual(session.eval_text('(sprintf nil "v=%d" 7)'), "v=7")
+        self.assertEqual(
+            session.eval_text('(progn (setq s nil) (sprintf s "v=%d" 7) s)'),
+            "v=7",
+        )
+        self.assertEqual(session.eval_text('(let ((fmt "v=%d")) (sprintf fmt 7))'), "v=7")
         self.assertEqual(session.eval_text('(strlen "hello")'), 5)
         self.assertEqual(session.eval_text('(strcmp "abc" "abd")'), -1)
         self.assertEqual(session.eval_text('(substr "abcdef" 2 3)'), "cde")
@@ -124,7 +132,9 @@ class EvaluatorTests(unittest.TestCase):
         self.assertTrue(session.eval_text("(plusp 4)"))
         self.assertTrue(session.eval_text("(neq 1 2)"))
         self.assertTrue(session.eval_text("(nequal '(1 2) '(2 3))"))
-        self.assertEqual(session.eval_text('(concat "a" 1 "b")'), "a1b")
+        self.assertEqual(format_value(session.eval_text('(concat "a" 1 "b")')), "a1b")
+        self.assertEqual(format_value(session.eval_text("(concat 'net (intern \"_1\"))")), "net_1")
+        self.assertEqual(session.eval_text('(strcat "pin_" \'A)'), "pin_A")
         self.assertTrue(session.eval_text('(alphalessp "abc" "abd")'))
 
     def test_errset_warn_and_higher_order_helpers(self):
@@ -145,12 +155,14 @@ class EvaluatorTests(unittest.TestCase):
         self.assertEqual(session.eval_text("(caseq '(1 2) (((1 2)) 7) (t 0))"), 0)
         self.assertEqual(session.eval_text("(case '(1 2) (((1 2)) 7) (t 0))"), 7)
         self.assertEqual(session.eval_text("(caseq 'b ((a) 1) ((b c) 2))"), 2)
+        self.assertEqual(session.eval_text("(progn (setq i 99) (for i 1 2 nil) i)"), 99)
 
     def test_symbol_and_property_helpers(self):
         session = SkillSession()
         self.assertEqual(session.eval_text("(set 'alpha 9)"), 9)
         self.assertEqual(session.eval_text("(symeval 'alpha)"), 9)
         self.assertTrue(str(format_value(session.eval_text("(gensym \"tmp\")"))).startswith("tmp"))
+        self.assertTrue(str(format_value(session.eval_text("(gensym 'net)"))).startswith("net"))
         session.eval_text("(putprop 'chip 10 'width)")
         self.assertEqual(session.eval_text("(get 'chip 'width)"), 10)
         self.assertEqual(format_value(session.eval_text("(plist 'chip)")), "(width 10)")
@@ -195,6 +207,7 @@ class EvaluatorTests(unittest.TestCase):
         self.assertEqual(session.eval_text('(upperCase "Abc")'), "ABC")
         self.assertEqual(session.eval_text('(lowerCase "AbC")'), "abc")
         self.assertEqual(session.eval_text('(buildString "a" 1 "b")'), "a1b")
+        self.assertEqual(session.eval_text("(buildString 'a 1 'b)"), "a1b")
         self.assertEqual(format_value(session.eval_text('(parseString "a  b c")')), '("a" "b" "c")')
         self.assertEqual(format_value(session.eval_text('(parseString "a,b;c" ",;")')), '("a" "b" "c")')
         self.assertEqual(session.eval_text("(add1 4)"), 5)
@@ -264,6 +277,77 @@ class EvaluatorTests(unittest.TestCase):
             )
             self.assertEqual(format_value(session.eval_text(program)), '("hello" "world" t)')
 
+    def test_additional_numeric_predicate_and_filesystem_helpers(self):
+        session = SkillSession()
+        self.assertEqual(session.eval_text("(fix 3.7)"), 3)
+        self.assertEqual(session.eval_text("(float 3)"), 3.0)
+        self.assertEqual(session.eval_text("(expt 2 5)"), 32)
+        self.assertEqual(session.eval_text("(remainder -7 3)"), -1)
+        self.assertEqual(session.eval_text("(leftshift 3 2)"), 12)
+        self.assertEqual(session.eval_text("(rightshift 12 2)"), 3)
+        self.assertEqual(format_value(session.eval_text("(ncons 5)")), "(5)")
+        self.assertEqual(format_value(session.eval_text("(xcons '(2 3) 1)")), "(1 2 3)")
+        self.assertTrue(session.eval_text("(pairp '(1 2))"))
+        self.assertTrue(session.eval_text("(dtpr '(1 2))"))
+        self.assertTrue(session.eval_text("(typep 4 'integer)"))
+        self.assertTrue(session.eval_text("(errsetstring \"(+ 1 2 3)\")"))
+        with tempfile.TemporaryDirectory() as temp_dir:
+            subdir = os.path.join(temp_dir, "child")
+            filepath = os.path.join(subdir, "a.txt")
+            program = """
+            (createDir "%s")
+            (isDir "%s")
+            (let ((p (outfile "%s")))
+              (fprintf p "1 2 3")
+              (drain p)
+              (close p))
+            (list
+              (isFile "%s")
+              (isFileName "%s")
+              (getDirFiles "%s")
+              (progn (changeWorkingDir "%s") (getWorkingDir))
+              (setSkillPath (list "%s"))
+              (getSkillPath))
+            """ % (
+                subdir.replace("\\", "\\\\"),
+                subdir.replace("\\", "\\\\"),
+                filepath.replace("\\", "\\\\"),
+                filepath.replace("\\", "\\\\"),
+                filepath.replace("\\", "\\\\"),
+                subdir.replace("\\", "\\\\"),
+                temp_dir.replace("\\", "\\\\"),
+                temp_dir.replace("\\", "\\\\"),
+            )
+            value = session.eval_text(program)
+            self.assertTrue(value[0])
+            self.assertTrue(value[1])
+            self.assertEqual(value[2], ["a.txt"])
+            self.assertEqual(value[3], temp_dir)
+            self.assertEqual(value[4], [temp_dir])
+            self.assertEqual(value[5], [temp_dir])
+            self.assertTrue(session.eval_text('(deleteFile "%s")' % filepath.replace("\\", "\\\\")))
+            self.assertIsNone(session.eval_text('(isFile "%s")' % filepath.replace("\\", "\\\\")))
+
+    def test_additional_port_helpers(self):
+        session = SkillSession()
+        value = session.eval_text(
+            """
+            (let ((p (instring "10 20 30")))
+              (list (fscanf p "%d" "%d")
+                    (fileTell p)
+                    (eof p)
+                    (fileSeek p 0)
+                    (portp p)
+                    (close p)))
+            """
+        )
+        self.assertEqual(value[0], ["10", "20"])
+        self.assertTrue(isinstance(value[1], int))
+        self.assertTrue(value[2])
+        self.assertEqual(value[3], 0)
+        self.assertTrue(value[4])
+        self.assertTrue(value[5])
+
     def test_additional_core_helpers(self):
         session = SkillSession()
         self.assertEqual(session.eval_text("(caadr '((1 2) (3 4)))"), 3)
@@ -301,7 +385,25 @@ class EvaluatorTests(unittest.TestCase):
         )
         self.assertEqual(value, 4)
         self.assertEqual(format_value(session.eval_text("(macroexpand '(inc count))")), "(setq count (+ count 1))")
-        self.assertTrue(session.eval_text("(mprocedure (noop x) `(list ,x))"))
+        self.assertTrue(
+            session.eval_text(
+                """
+                (mprocedure (twice form)
+                  (let ((value (cadr form)))
+                    `(list ,value ,value)))
+                (equal (twice 9) '(9 9))
+                """
+            )
+        )
+        self.assertEqual(
+            session.eval_text(
+                """
+                (defmacro sum (@rest nums) `(plus ,@nums))
+                (sum 1 2 3 4)
+                """
+            ),
+            10,
+        )
 
     def test_regex_and_symbol_conversion_helpers(self):
         session = SkillSession()
@@ -316,7 +418,8 @@ class EvaluatorTests(unittest.TestCase):
         self.assertTrue(session.eval_text("(evenp 8)"))
         self.assertTrue(session.eval_text("(oddp 9)"))
         self.assertEqual(session.eval_text('(substring "abcdef" 2 3)'), "bcd")
-        self.assertEqual(session.eval_text('(getchar "abcdef" 2)'), "b")
+        self.assertEqual(format_value(session.eval_text('(getchar "abcdef" 2)')), "b")
+        self.assertIsNone(session.eval_text('(getchar "abcdef" 9)'))
         self.assertEqual(session.eval_text('(index "bc" "abcdef")'), 2)
         self.assertEqual(session.eval_text('(rindex "bc" "zbcxbc")'), 5)
         self.assertEqual(session.eval_text('(nindex "bc" "zbcxbc" 3)'), 5)
@@ -333,10 +436,80 @@ class EvaluatorTests(unittest.TestCase):
         self.assertEqual(format_value(session.eval_text("(setof (lambda (x) (> x 1)) '(1 2 3))")), "(2 3)")
         self.assertEqual(format_value(session.eval_text("(exists x '(1 2 3) (> x 1))")), "(2 3)")
         self.assertTrue(session.eval_text("(forall x '(1 2 3) (> x 0))"))
+        self.assertEqual(session.eval_text("(progn (setq x 77) (exists x '(1 2 3) (> x 1)) x)"), 77)
         self.assertEqual(format_value(session.eval_text("(map (lambda (x) (* x 2)) '(1 2 3))")), "(2 4 6)")
         self.assertEqual(
             format_value(session.eval_text("(let ((x '(1 2 3))) (mapinto (lambda (y) (+ y 1)) x))")),
             "(2 3 4)",
+        )
+
+    def test_flexible_parameter_lists(self):
+        session = SkillSession()
+        self.assertEqual(
+            format_value(
+                session.eval_text(
+                    """
+                    (procedure (trace fun @rest args)
+                      args)
+                    (trace 'plus 1 2 3)
+                    """
+                )
+            ),
+            "(1 2 3)",
+        )
+        self.assertEqual(
+            format_value(
+                session.eval_text(
+                    """
+                    (procedure (bbox height width @optional (xCoord 0) (yCoord 0))
+                      (list xCoord yCoord))
+                    (bbox 1 2 4)
+                    """
+                )
+            ),
+            "(4 0)",
+        )
+        self.assertEqual(
+            format_value(
+                session.eval_text(
+                    """
+                    (defun test (a @key x y @rest z)
+                      (list a x y z))
+                    (test 0 ?x 1 ?x 2)
+                    """
+                )
+            ),
+            "(0 1 nil (?x 2))",
+        )
+        self.assertEqual(
+            session.eval_text(
+                """
+                (defun optional-default (x @optional (y (+ x 1)))
+                  y)
+                (optional-default 2)
+                """
+            ),
+            3,
+        )
+        self.assertEqual(
+            session.eval_text(
+                """
+                (defun key-default (@key (x 1) (y (+ x 2)))
+                  y)
+                (key-default ?x 5)
+                """
+            ),
+            7,
+        )
+        self.assertEqual(
+            session.eval_text(
+                """
+                (defun aux-default (x @aux (y (+ x 3)))
+                  y)
+                (aux-default 4)
+                """
+            ),
+            7,
         )
 
 

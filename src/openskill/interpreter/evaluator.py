@@ -19,6 +19,9 @@ class SkillSymbolValue(object):
     def __repr__(self):
         return "SkillSymbolValue(%r)" % (self.name,)
 
+    def __str__(self):
+        return self.name
+
 
 class BuiltinFunction(object):
     def __init__(self, name, func):
@@ -37,13 +40,8 @@ class SkillProcedure(object):
         self.env = env
 
     def invoke(self, session, caller_env, *args):
-        if len(args) != len(self.params):
-            raise SkillEvalError(
-                "%s expected %s arguments, got %s" % (self.name, len(self.params), len(args))
-            )
         call_env = Environment(parent=caller_env)
-        for name, value in zip(self.params, args):
-            call_env.define(name, value)
+        _bind_arguments(self.name, self.params, args, call_env, session)
         result = None
         for form in self.body:
             result = evaluate(form, call_env, session)
@@ -51,20 +49,19 @@ class SkillProcedure(object):
 
 
 class SkillMacro(object):
-    def __init__(self, name, params, body, env):
+    def __init__(self, name, params, body, env, whole_form=False):
         self.name = name
         self.params = params
         self.body = body
         self.env = env
+        self.whole_form = whole_form
 
-    def expand(self, session, caller_env, arg_forms):
-        if len(arg_forms) != len(self.params):
-            raise SkillEvalError(
-                "%s expected %s arguments, got %s" % (self.name, len(self.params), len(arg_forms))
-            )
+    def expand(self, session, caller_env, arg_forms, full_form=None):
         macro_env = Environment(parent=caller_env)
-        for name, form in zip(self.params, arg_forms):
-            macro_env.define(name, datum_from_form(form))
+        if self.whole_form:
+            _bind_arguments(self.name, self.params, [datum_from_form(full_form)], macro_env, session)
+        else:
+            _bind_arguments(self.name, self.params, [datum_from_form(form) for form in arg_forms], macro_env, session)
         result = None
         for form in self.body:
             result = evaluate(form, macro_env, session)
@@ -261,6 +258,113 @@ def _ensure_symbol(form):
     return form.name
 
 
+def _parse_param_entry(form):
+    if isinstance(form, SymbolForm):
+        return form.name, None
+    if isinstance(form, ListForm) and form.items:
+        name = _ensure_symbol(form.items[0])
+        default = form.items[1] if len(form.items) > 1 else None
+        return name, default
+    raise SkillEvalError("invalid parameter specification", form=form)
+
+
+def _compile_params(params_form):
+    spec = {
+        "required": [],
+        "optional": [],
+        "key": [],
+        "rest": None,
+        "aux": [],
+    }
+    mode = "required"
+    for item in params_form.items:
+        if isinstance(item, SymbolForm) and item.name in ("@rest", "@optional", "@key", "@aux"):
+            mode = item.name[1:]
+            continue
+        if mode == "required":
+            spec["required"].append(_ensure_symbol(item))
+            continue
+        if mode == "rest":
+            spec["rest"] = _ensure_symbol(item)
+            mode = "post_rest"
+            continue
+        if mode == "post_rest":
+            raise SkillEvalError("only @aux may follow @rest", form=item)
+        if mode in ("optional", "key", "aux"):
+            spec[mode].append(_parse_param_entry(item))
+            continue
+        raise SkillEvalError("unsupported parameter mode", form=item)
+    return spec
+
+
+def _evaluate_default(default_form, env, session):
+    if default_form is None:
+        return None
+    return evaluate(default_form, env, session)
+
+
+def _bind_arguments(name, spec, args, env, session):
+    required = spec["required"]
+    optional = spec["optional"]
+    key_entries = dict(spec["key"])
+    rest_name = spec["rest"]
+    aux_entries = spec["aux"]
+
+    if len(args) < len(required):
+        raise SkillEvalError("%s expected at least %s arguments, got %s" % (name, len(required), len(args)))
+
+    position = 0
+    for required_name in required:
+        env.define(required_name, args[position])
+        position += 1
+
+    if spec["key"] and spec["optional"]:
+        raise SkillEvalError("%s cannot combine @key and @optional" % name)
+
+    for optional_name, default in optional:
+        if position < len(args):
+            env.define(optional_name, args[position])
+            position += 1
+        else:
+            env.define(optional_name, _evaluate_default(default, env, session))
+
+    seen_keys = {}
+    provided_keys = {}
+    rest_values = []
+    if spec["key"]:
+        while position < len(args):
+            current = args[position]
+            if (
+                isinstance(current, SkillSymbolValue)
+                and current.name.startswith("?")
+                and position + 1 < len(args)
+                and current.name[1:] in key_entries
+                and current.name[1:] not in seen_keys
+            ):
+                matched_name = current.name[1:]
+                provided_keys[matched_name] = args[position + 1]
+                seen_keys[matched_name] = True
+                position += 2
+                continue
+            rest_values.append(current)
+            position += 1
+        for key_name, default in spec["key"]:
+            if key_name in provided_keys:
+                env.define(key_name, provided_keys[key_name])
+            else:
+                env.define(key_name, _evaluate_default(default, env, session))
+    else:
+        rest_values.extend(args[position:])
+
+    if rest_name is not None:
+        env.define(rest_name, rest_values if rest_values else None)
+    elif rest_values:
+        raise SkillEvalError("%s got unexpected extra arguments" % name)
+
+    for aux_name, default in aux_entries:
+        env.define(aux_name, _evaluate_default(default, env, session))
+
+
 def _eval_sequence(forms, env, session):
     result = None
     for form in forms:
@@ -372,8 +476,7 @@ def _eval_lambda(form, env):
     params_form = form.items[1]
     if not isinstance(params_form, ListForm):
         raise SkillEvalError("lambda parameters must be a list", form=params_form)
-    params = [_ensure_symbol(param) for param in params_form.items]
-    return SkillProcedure("<lambda>", params, form.items[2:], env)
+    return SkillProcedure("<lambda>", _compile_params(params_form), form.items[2:], env)
 
 
 def _eval_procedure(form, env):
@@ -383,8 +486,8 @@ def _eval_procedure(form, env):
     if not isinstance(signature, ListForm) or not signature.items:
         raise SkillEvalError("procedure signature must be a list", form=signature)
     name = _ensure_symbol(signature.items[0])
-    params = [_ensure_symbol(param) for param in signature.items[1:]]
-    proc = SkillProcedure(name, params, form.items[2:], env)
+    params_form = ListForm(signature.items[1:], signature.line, signature.column, signature.filename)
+    proc = SkillProcedure(name, _compile_params(params_form), form.items[2:], env)
     env.set(name, proc)
     return proc
 
@@ -461,6 +564,7 @@ def _eval_foreach(form, env, session):
     if not isinstance(values, list):
         raise SkillEvalError("foreach expects a list", form=form.items[2])
     loop_env = Environment(parent=env)
+    loop_env.define(name, None)
     for value in values:
         loop_env.set(name, value)
         _eval_sequence(form.items[3:], loop_env, session)
@@ -475,6 +579,7 @@ def _eval_for(form, env, session):
     end = evaluate(form.items[3], env, session)
     step = 1 if start <= end else -1
     loop_env = Environment(parent=env)
+    loop_env.define(name, None)
     current = start
     while (step > 0 and current <= end) or (step < 0 and current >= end):
         loop_env.set(name, current)
@@ -490,8 +595,7 @@ def _eval_defun(form, env):
     params_form = form.items[2]
     if not isinstance(params_form, ListForm):
         raise SkillEvalError("defun parameters must be a list", form=params_form)
-    params = [_ensure_symbol(param) for param in params_form.items]
-    proc = SkillProcedure(name, params, form.items[3:], env)
+    proc = SkillProcedure(name, _compile_params(params_form), form.items[3:], env)
     env.set(name, proc)
     return proc
 
@@ -503,8 +607,7 @@ def _eval_defmacro(form, env):
     params_form = form.items[2]
     if not isinstance(params_form, ListForm):
         raise SkillEvalError("defmacro parameters must be a list", form=params_form)
-    params = [_ensure_symbol(param) for param in params_form.items]
-    macro = SkillMacro(name, params, form.items[3:], env)
+    macro = SkillMacro(name, _compile_params(params_form), form.items[3:], env)
     env.set(name, macro)
     return macro
 
@@ -516,8 +619,11 @@ def _eval_mprocedure(form, env):
     if not isinstance(signature, ListForm) or not signature.items:
         raise SkillEvalError("mprocedure signature must be a list", form=signature)
     name = _ensure_symbol(signature.items[0])
-    params = [_ensure_symbol(param) for param in signature.items[1:]]
-    macro = SkillMacro(name, params, form.items[2:], env)
+    params_form = ListForm(signature.items[1:], signature.line, signature.column, signature.filename)
+    compiled = _compile_params(params_form)
+    if len(compiled["required"]) != 1 or compiled["optional"] or compiled["key"] or compiled["rest"]:
+        raise SkillEvalError("mprocedure requires a single formal argument", form=signature)
+    macro = SkillMacro(name, compiled, form.items[2:], env, whole_form=True)
     env.set(name, macro)
     return macro
 
@@ -530,6 +636,28 @@ def _eval_errset(form, env, session):
     return [result]
 
 
+def _evaluate_call_arg(form, env, session):
+    return evaluate(form, env, session)
+
+
+def _evaluate_procedure_call_args(operator, arg_forms, env, session):
+    if not isinstance(operator, SkillProcedure) or not operator.params["key"]:
+        return [_evaluate_call_arg(arg, env, session) for arg in arg_forms]
+    args = []
+    position = 0
+    positional_limit = len(operator.params["required"]) + len(operator.params["optional"])
+    key_names = {name for name, _ in operator.params["key"]}
+    while position < len(arg_forms):
+        form = arg_forms[position]
+        if position >= positional_limit and isinstance(form, SymbolForm) and form.name.startswith("?") and form.name[1:] in key_names:
+            args.append(SkillSymbolValue(form.name))
+            position += 1
+            continue
+        args.append(_evaluate_call_arg(form, env, session))
+        position += 1
+    return args
+
+
 def _eval_exists_form(form, env, session):
     if len(form.items) != 4:
         raise SkillEvalError("exists requires variable, list, and test", form=form)
@@ -539,6 +667,7 @@ def _eval_exists_form(form, env, session):
         return None
     values = _ensure_list_value(values, "exists")
     loop_env = Environment(parent=env)
+    loop_env.define(name, None)
     for index, value in enumerate(values):
         loop_env.set(name, value)
         if is_truthy(evaluate(form.items[3], loop_env, session)):
@@ -555,6 +684,7 @@ def _eval_forall_form(form, env, session):
         return True
     values = _ensure_list_value(values, "forall")
     loop_env = Environment(parent=env)
+    loop_env.define(name, None)
     for value in values:
         loop_env.set(name, value)
         if not is_truthy(evaluate(form.items[3], loop_env, session)):
@@ -720,18 +850,44 @@ def evaluate(form, env, session):
                 if is_truthy(value):
                     return value
             return None
+        if head.name == "sprintf":
+            if len(form.items) < 2:
+                raise SkillEvalError("sprintf expects at least a format string", form=form)
+            target_name = None
+            start_index = 1
+            if isinstance(form.items[1], SymbolForm):
+                if form.items[1].name == "nil":
+                    start_index = 2
+                else:
+                    is_bound = True
+                    try:
+                        current_value = env.get(form.items[1].name)
+                    except SkillEvalError:
+                        is_bound = False
+                        current_value = None
+                    if (not is_bound) or current_value is None or (len(form.items) > 2 and isinstance(form.items[2], StringForm)):
+                        target_name = form.items[1].name
+                        start_index = 2
+            if len(form.items) <= start_index:
+                raise SkillEvalError("sprintf requires a format string", form=form)
+            fmt = evaluate(form.items[start_index], env, session)
+            values = tuple(_evaluate_call_arg(arg, env, session) for arg in form.items[start_index + 1 :])
+            text = fmt % values if values else fmt
+            if target_name is not None:
+                env.set(target_name, text)
+            return text
     operator = evaluate(head, env, session)
     if isinstance(operator, SkillMacro):
-        expansion = operator.expand(session, env, form.items[1:])
+        expansion = operator.expand(session, env, form.items[1:], full_form=form)
         return evaluate(form_from_datum(expansion, filename=form.filename, line=form.line, column=form.column), env, session)
-    args = [evaluate(arg, env, session) for arg in form.items[1:]]
+    args = _evaluate_procedure_call_args(operator, form.items[1:], env, session)
     previous_env = getattr(session, "current_env", None)
     session.current_env = env
     try:
         if isinstance(operator, SkillProcedure):
             return operator.invoke(session, env, *args)
         if isinstance(operator, SkillMacro):
-            return operator.expand(session, env, form.items[1:])
+            return operator.expand(session, env, form.items[1:], full_form=form)
         if callable(operator):
             return operator(session, *args)
     finally:
@@ -769,11 +925,13 @@ def _builtin_multiply(session, *args):
 
 def _builtin_divide(session, *args):
     _require_args("/", args, minimum=1)
+    integer_mode = all(isinstance(value, int) and not isinstance(value, bool) for value in args)
     if len(args) == 1:
-        return 1 / args[0]
+        result = 1 / args[0]
+        return int(result) if integer_mode else result
     result = args[0]
     for value in args[1:]:
-        result /= value
+        result = int(result / value) if integer_mode else (result / value)
     return result
 
 
@@ -794,6 +952,16 @@ def _builtin_cons(session, *args):
     if not isinstance(tail, list):
         raise SkillEvalError("cons expects a list tail")
     return [args[0]] + tail
+
+
+def _builtin_ncons(session, *args):
+    _require_args("ncons", args, exact=1)
+    return [args[0]]
+
+
+def _builtin_xcons(session, *args):
+    _require_args("xcons", args, exact=2)
+    return _builtin_cons(session, args[1], args[0])
 
 
 def _builtin_car(session, *args):
@@ -1141,6 +1309,14 @@ def _builtin_type(session, *args):
     return SkillSymbolValue(type(value).__name__)
 
 
+def _builtin_typep(session, *args):
+    _require_args("typep", args, exact=2)
+    value, type_name = args
+    if isinstance(type_name, SkillSymbolValue):
+        type_name = type_name.name
+    return True if format_value(_builtin_type(session, value)) == str(type_name) else None
+
+
 def _builtin_eval(session, *args):
     _require_args("eval", args, exact=1)
     env = getattr(session, "current_env", None) or session.global_env
@@ -1178,6 +1354,8 @@ def _builtin_makunbound(session, *args):
 
 def _builtin_gensym(session, *args):
     prefix = args[0] if args else "G"
+    if isinstance(prefix, SkillSymbolValue):
+        prefix = prefix.name
     session.gensym_counter += 1
     return SkillSymbolValue("%s%s" % (prefix, session.gensym_counter))
 
@@ -1282,6 +1460,15 @@ def _builtin_atom(session, *args):
 def _builtin_listp(session, *args):
     _require_args("listp", args, exact=1)
     return True if isinstance(args[0], list) or args[0] is None else None
+
+
+def _builtin_pairp(session, *args):
+    _require_args("pairp", args, exact=1)
+    return True if isinstance(args[0], list) and len(args[0]) >= 1 else None
+
+
+def _builtin_dtpr(session, *args):
+    return _builtin_pairp(session, *args)
 
 
 def _builtin_symbolp(session, *args):
@@ -1398,7 +1585,7 @@ def _builtin_strcat(session, *args):
 
 
 def _builtin_concat(session, *args):
-    return _builtin_strcat(session, *args)
+    return SkillSymbolValue("".join(str(arg) for arg in args))
 
 
 def _builtin_strlen(session, *args):
@@ -1442,7 +1629,11 @@ def _builtin_substring(session, *args):
 def _builtin_getchar(session, *args):
     _require_args("getchar", args, exact=2)
     text, index = args
-    return text[index - 1]
+    if isinstance(text, SkillSymbolValue):
+        text = text.name
+    if index < 1 or index > len(text):
+        return None
+    return SkillSymbolValue(text[index - 1])
 
 
 def _builtin_index_common(args, name, reverse=False, start=None):
@@ -1550,6 +1741,16 @@ def _builtin_atof(session, *args):
     return float(args[0])
 
 
+def _builtin_fix(session, *args):
+    _require_args("fix", args, exact=1)
+    return int(args[0])
+
+
+def _builtin_float(session, *args):
+    _require_args("float", args, exact=1)
+    return float(args[0])
+
+
 def _builtin_abs(session, *args):
     _require_args("abs", args, exact=1)
     return abs(args[0])
@@ -1581,6 +1782,30 @@ def _builtin_round(session, *args):
     if value >= 0:
         return int(math.floor(value + 0.5))
     return int(math.ceil(value - 0.5))
+
+
+def _builtin_expt(session, *args):
+    _require_args("expt", args, exact=2)
+    return args[0] ** args[1]
+
+
+def _builtin_remainder(session, *args):
+    _require_args("remainder", args, exact=2)
+    left, right = args
+    value = math.fmod(left, right)
+    if isinstance(left, int) and isinstance(right, int):
+        return int(value)
+    return value
+
+
+def _builtin_leftshift(session, *args):
+    _require_args("leftshift", args, exact=2)
+    return args[0] << args[1]
+
+
+def _builtin_rightshift(session, *args):
+    _require_args("rightshift", args, exact=2)
+    return args[0] >> args[1]
 
 
 def _builtin_exp(session, *args):
@@ -1666,6 +1891,11 @@ def _builtin_arrayp(session, *args):
     return True if isinstance(args[0], SkillArray) else None
 
 
+def _builtin_portp(session, *args):
+    _require_args("portp", args, exact=1)
+    return True if isinstance(args[0], SkillPort) and args[0].handle is not None else None
+
+
 def _builtin_make_table(session, *args):
     _require_args("makeTable", args, minimum=1)
     name = args[0]
@@ -1748,7 +1978,7 @@ def _builtin_getc(session, *args):
     _require_args("getc", args, exact=1)
     port = _require_open_port(args[0], "getc")
     value = port.handle.read(1)
-    return value if value != "" else None
+    return SkillSymbolValue(value) if value != "" else None
 
 
 def _builtin_fprintf(session, *args):
@@ -1759,6 +1989,120 @@ def _builtin_fprintf(session, *args):
     text = fmt % values if values else fmt
     port.handle.write(text)
     return True
+
+
+def _builtin_fscanf(session, *args):
+    _require_args("fscanf", args, minimum=2)
+    port = _require_open_port(args[0], "fscanf")
+    count = len(args) - 1
+    data = port.handle.read().split()
+    if len(data) < count:
+        return None
+    result = data[:count]
+    return result if len(result) > 1 else result[0]
+
+
+def _builtin_eof(session, *args):
+    _require_args("eof", args, exact=1)
+    port = _require_open_port(args[0], "eof")
+    position = port.handle.tell()
+    chunk = port.handle.read(1)
+    port.handle.seek(position)
+    return True if chunk == "" else None
+
+
+def _builtin_drain(session, *args):
+    _require_args("drain", args, exact=1)
+    port = _require_open_port(args[0], "drain")
+    if hasattr(port.handle, "flush"):
+        port.handle.flush()
+    return True
+
+
+def _builtin_file_length(session, *args):
+    _require_args("fileLength", args, exact=1)
+    port = _require_open_port(args[0], "fileLength")
+    position = port.handle.tell()
+    port.handle.seek(0, os.SEEK_END)
+    length = port.handle.tell()
+    port.handle.seek(position)
+    return length
+
+
+def _builtin_file_tell(session, *args):
+    _require_args("fileTell", args, exact=1)
+    port = _require_open_port(args[0], "fileTell")
+    return port.handle.tell()
+
+
+def _builtin_file_seek(session, *args):
+    _require_args("fileSeek", args, exact=2)
+    port = _require_open_port(args[0], "fileSeek")
+    port.handle.seek(args[1])
+    return args[1]
+
+
+def _builtin_is_file(session, *args):
+    _require_args("isFile", args, exact=1)
+    return True if os.path.isfile(args[0]) else None
+
+
+def _builtin_is_dir(session, *args):
+    _require_args("isDir", args, exact=1)
+    return True if os.path.isdir(args[0]) else None
+
+
+def _builtin_is_file_name(session, *args):
+    _require_args("isFileName", args, exact=1)
+    return True if isinstance(args[0], str) and len(args[0]) > 0 else None
+
+
+def _builtin_create_dir(session, *args):
+    _require_args("createDir", args, exact=1)
+    os.makedirs(args[0], exist_ok=True)
+    return True
+
+
+def _builtin_get_dir_files(session, *args):
+    _require_args("getDirFiles", args, exact=1)
+    return sorted(os.listdir(args[0]))
+
+
+def _builtin_delete_file(session, *args):
+    _require_args("deleteFile", args, exact=1)
+    os.remove(args[0])
+    return True
+
+
+def _builtin_get_working_dir(session, *args):
+    _require_args("getWorkingDir", args, exact=0)
+    return session.cwd
+
+
+def _builtin_change_working_dir(session, *args):
+    _require_args("changeWorkingDir", args, exact=1)
+    session.cwd = os.path.abspath(args[0])
+    return session.cwd
+
+
+def _builtin_get_skill_path(session, *args):
+    _require_args("getSkillPath", args, exact=0)
+    return list(session.skill_path)
+
+
+def _builtin_set_skill_path(session, *args):
+    _require_args("setSkillPath", args, exact=1)
+    values = _ensure_list_value(args[0], "setSkillPath")
+    session.skill_path = [str(value) for value in values]
+    return list(session.skill_path)
+
+
+def _builtin_errsetstring(session, *args):
+    _require_args("errsetstring", args, exact=1)
+    try:
+        return [session.eval_text(args[0], filename="<errsetstring>")]
+    except SkillError:
+        return None
 
 
 def _builtin_load(session, *args):
@@ -1953,7 +2297,7 @@ def _builtin_macroexpand(session, *args):
     operator = evaluate(form.items[0], env, session)
     if not isinstance(operator, SkillMacro):
         return args[0]
-    return operator.expand(session, env, form.items[1:])
+    return operator.expand(session, env, form.items[1:], full_form=form)
 
 
 def _make_cxr(name):
@@ -1985,6 +2329,8 @@ def create_global_env():
         "mod": _builtin_mod,
         "list": _builtin_list,
         "cons": _builtin_cons,
+        "ncons": _builtin_ncons,
+        "xcons": _builtin_xcons,
         "car": _builtin_car,
         "cdr": _builtin_cdr,
         "cadr": lambda session, value: _builtin_car(session, _builtin_cdr(session, value)),
@@ -2035,6 +2381,7 @@ def create_global_env():
         "remprop": _builtin_remprop,
         "reverse": _builtin_reverse,
         "type": _builtin_type,
+        "typep": _builtin_typep,
         "eq": _builtin_eq,
         "neq": _builtin_neq,
         "equal": _builtin_equal,
@@ -2043,6 +2390,8 @@ def create_global_env():
         "null": _builtin_null,
         "atom": _builtin_atom,
         "listp": _builtin_listp,
+        "pairp": _builtin_pairp,
+        "dtpr": _builtin_dtpr,
         "symbolp": _builtin_symbolp,
         "stringp": _builtin_stringp,
         "numberp": _builtin_numberp,
@@ -2099,10 +2448,16 @@ def create_global_env():
         "rexSubstitute": _builtin_rex_substitute,
         "atoi": _builtin_atoi,
         "atof": _builtin_atof,
+        "fix": _builtin_fix,
+        "float": _builtin_float,
         "abs": _builtin_abs,
         "add1": _builtin_add1,
         "sub1": _builtin_sub1,
         "round": _builtin_round,
+        "expt": _builtin_expt,
+        "remainder": _builtin_remainder,
+        "leftshift": _builtin_leftshift,
+        "rightshift": _builtin_rightshift,
         "exp": _builtin_exp,
         "log": _builtin_log,
         "sqrt": _builtin_sqrt,
@@ -2128,6 +2483,7 @@ def create_global_env():
         "arrayref": _builtin_arrayref,
         "setarray": _builtin_setarray,
         "arrayp": _builtin_arrayp,
+        "portp": _builtin_portp,
         "makeTable": _builtin_make_table,
         "put": _builtin_put,
         "tablep": _builtin_tablep,
@@ -2141,6 +2497,23 @@ def create_global_env():
         "gets": _builtin_gets,
         "getc": _builtin_getc,
         "fprintf": _builtin_fprintf,
+        "fscanf": _builtin_fscanf,
+        "eof": _builtin_eof,
+        "drain": _builtin_drain,
+        "fileLength": _builtin_file_length,
+        "fileTell": _builtin_file_tell,
+        "fileSeek": _builtin_file_seek,
+        "isFile": _builtin_is_file,
+        "isDir": _builtin_is_dir,
+        "isFileName": _builtin_is_file_name,
+        "createDir": _builtin_create_dir,
+        "getDirFiles": _builtin_get_dir_files,
+        "deleteFile": _builtin_delete_file,
+        "getWorkingDir": _builtin_get_working_dir,
+        "changeWorkingDir": _builtin_change_working_dir,
+        "getSkillPath": _builtin_get_skill_path,
+        "setSkillPath": _builtin_set_skill_path,
+        "errsetstring": _builtin_errsetstring,
     }
     for width in range(2, 5):
         for ops in product("ad", repeat=width):

@@ -3,6 +3,8 @@ name: Release
 on:
   workflow_dispatch:
   push:
+    branches:
+      - main
     tags:
       - 'v*'
 
@@ -20,6 +22,7 @@ jobs:
       release_tag: ${{ steps.meta.outputs.release_tag }}
       release_name: ${{ steps.meta.outputs.release_name }}
       prerelease: ${{ steps.meta.outputs.prerelease }}
+      make_latest: ${{ steps.meta.outputs.make_latest }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -35,16 +38,19 @@ jobs:
             RELEASE_TAG="${GITHUB_REF_NAME}"
             RELEASE_NAME="OpenSKILL ${VERSION}"
             PRERELEASE="false"
+            MAKE_LATEST="legacy"
           else
             VERSION="0.1.0.dev0+g${SHA}"
             RELEASE_TAG="snapshot-${SHA}"
             RELEASE_NAME="OpenSKILL snapshot ${SHA}"
             PRERELEASE="true"
+            MAKE_LATEST="false"
           fi
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "release_tag=${RELEASE_TAG}" >> "$GITHUB_OUTPUT"
           echo "release_name=${RELEASE_NAME}" >> "$GITHUB_OUTPUT"
           echo "prerelease=${PRERELEASE}" >> "$GITHUB_OUTPUT"
+          echo "make_latest=${MAKE_LATEST}" >> "$GITHUB_OUTPUT"
 
   build:
     needs: meta
@@ -129,5 +135,6 @@ jobs:
           name: ${{ needs.meta.outputs.release_name }}
           prerelease: ${{ needs.meta.outputs.prerelease == 'true' }}
           generate_release_notes: ${{ needs.meta.outputs.prerelease != 'true' }}
+          make_latest: ${{ needs.meta.outputs.make_latest }}
           files: |
             release-bundle/*

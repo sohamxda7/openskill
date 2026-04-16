@@ -16,6 +16,7 @@ class SkillSession(object):
         self.gensym_counter = 0
         self.random_state = random.Random(0)
         self.warnings = []
+        self.skill_path = [self.cwd]
 
     def eval_text(self, source, filename="<string>"):
         forms = parse(source, filename=filename)

@@ -1,0 +1,133 @@
+name: Release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  meta:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      release_tag: ${{ steps.meta.outputs.release_tag }}
+      release_name: ${{ steps.meta.outputs.release_name }}
+      prerelease: ${{ steps.meta.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Compute release metadata
+        id: meta
+        shell: bash
+        run: |
+          SHA="$(git rev-parse --short HEAD)"
+          if [[ "${GITHUB_REF_TYPE}" == "tag" && "${GITHUB_REF_NAME}" == v* ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+            RELEASE_TAG="${GITHUB_REF_NAME}"
+            RELEASE_NAME="OpenSKILL ${VERSION}"
+            PRERELEASE="false"
+          else
+            VERSION="0.1.0.dev0+g${SHA}"
+            RELEASE_TAG="snapshot-${SHA}"
+            RELEASE_NAME="OpenSKILL snapshot ${SHA}"
+            PRERELEASE="true"
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "release_tag=${RELEASE_TAG}" >> "$GITHUB_OUTPUT"
+          echo "release_name=${RELEASE_NAME}" >> "$GITHUB_OUTPUT"
+          echo "prerelease=${PRERELEASE}" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: meta
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ['3.11']
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install package
+        env:
+          OPENSKILL_BUILD_VERSION: ${{ needs.meta.outputs.version }}
+        run: python -m pip install --upgrade pip && python -m pip install -e .[build]
+      - name: Run tests
+        run: python -m unittest discover -s tests -v
+      - name: Build CLI one-file binary
+        env:
+          OPENSKILL_BUILD_VERSION: ${{ needs.meta.outputs.version }}
+        run: python -m PyInstaller --noconfirm --clean --onefile --paths src --collect-data openskill --name openskill scripts/launch_cli.py
+      - name: Build IDE one-file binary
+        env:
+          OPENSKILL_BUILD_VERSION: ${{ needs.meta.outputs.version }}
+        run: python -m PyInstaller --noconfirm --clean --onefile --windowed --paths src --collect-data openskill --name openskill-ide scripts/launch_ide.py
+      - name: Rename binaries
+        shell: bash
+        run: |
+          CLI_EXT=""
+          IDE_EXT=""
+          if [[ "${RUNNER_OS}" == "Windows" ]]; then
+            CLI_EXT=".exe"
+            IDE_EXT=".exe"
+          fi
+          mv "dist/openskill${CLI_EXT}" "dist/openskill-${{ needs.meta.outputs.version }}-${RUNNER_OS,,}${CLI_EXT}"
+          mv "dist/openskill-ide${IDE_EXT}" "dist/openskill-ide-${{ needs.meta.outputs.version }}-${RUNNER_OS,,}${IDE_EXT}"
+      - name: Upload CLI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: openskill-${{ runner.os }}-cli
+          path: |
+            dist/openskill-${{ needs.meta.outputs.version }}-*
+      - name: Upload IDE artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: openskill-${{ runner.os }}-ide
+          path: |
+            dist/openskill-ide-${{ needs.meta.outputs.version }}-*
+
+  publish:
+    needs: [meta, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+      - name: Prepare release bundle
+        shell: bash
+        run: |
+          mkdir -p release-bundle
+          find release-assets -type f -exec cp {} release-bundle/ \;
+          (
+            cd release-bundle
+            sha256sum * > SHA256SUMS.txt
+          )
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.meta.outputs.release_tag }}
+          target_commitish: ${{ github.sha }}
+          name: ${{ needs.meta.outputs.release_name }}
+          prerelease: ${{ needs.meta.outputs.prerelease == 'true' }}
+          generate_release_notes: ${{ needs.meta.outputs.prerelease != 'true' }}
+          files: |
+            release-bundle/*

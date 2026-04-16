@@ -1,0 +1,40 @@
+OpenSKILL Project Notice
+========================
+
+OpenSKILL is an independent educational and open-source project.
+
+No affiliation
+--------------
+
+This repository is not affiliated with, endorsed by, or sponsored by Cadence
+Design Systems, Inc.
+
+Trademarks
+----------
+
+Names used to describe compatibility targets or prior-art ecosystems, including
+"SKILL", "Cadence", and "Virtuoso", are the property of their respective owners.
+Their use here is nominative only.
+
+Clean-room statement
+--------------------
+
+This project is intended to be developed as a clean-room implementation. Vendor
+documentation may be consulted only to understand externally visible behavior.
+Text, examples, and reference material shipped in this repository must be
+written from scratch and must not copy or closely paraphrase restricted source
+material.
+
+No legal guarantee
+------------------
+
+This notice is not legal advice and does not guarantee immunity from copyright,
+contract, trademark, DMCA, cease-and-desist, or other legal claims. Users and
+contributors are responsible for evaluating their own legal rights and
+obligations, including any materials or scripts they import or distribute.
+
+Warranty
+--------
+
+This software is distributed under GPL-3.0-or-later and is provided without
+warranty. See the LICENSE file for the license terms and warranty disclaimer.

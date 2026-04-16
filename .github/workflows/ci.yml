@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  test:
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ['3.11']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Compute build version
+        id: version
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" && "${GITHUB_REF_NAME}" == v* ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="0.1.0.dev0+g$(git rev-parse --short HEAD)"
+          fi
+          echo "value=${VERSION}" >> "$GITHUB_OUTPUT"
+      - name: Install package
+        env:
+          OPENSKILL_BUILD_VERSION: ${{ steps.version.outputs.value }}
+        run: python -m pip install --upgrade pip && python -m pip install -e .[build]
+      - name: Run tests
+        run: python -m unittest discover -s tests -v
+      - name: CLI smoke tests
+        run: |
+          python -m openskill --help
+          python -m openskill doctor
+          python -m openskill api find procedure
+          python -m openskill --expr "(apply + 1 '(2 3 4))"

@@ -72,6 +72,13 @@ class ParserTests(unittest.TestCase):
             ],
         )
 
+    def test_lexes_tight_operator_syntax(self):
+        tokens = tokenize("fib(n-1) x<y+z A*x1+B*y1+C != 0.0", filename="sample.il")
+        self.assertEqual(
+            [token.text for token in tokens[:-1]],
+            ["fib", "(", "n", "-", "1", ")", "x", "<", "y", "+", "z", "A", "*", "x1", "+", "B", "*", "y1", "+", "C", "!=", "0.0"],
+        )
+
     def test_lexes_arrow_slot_access(self):
         tokens = tokenize("obj->slot = 1", filename="sample.il")
         self.assertEqual(
@@ -79,8 +86,15 @@ class ParserTests(unittest.TestCase):
             [("SYMBOL", "obj"), ("ARROW", "->"), ("SYMBOL", "slot"), ("SYMBOL", "="), ("SYMBOL", "1")],
         )
 
+    def test_lexes_relational_and_logical_operators(self):
+        tokens = tokenize("a<1 b <= 2 c>=3 d > 4 left || right", filename="sample.il")
+        self.assertEqual(
+            [token.text for token in tokens[:-1]],
+            ["a", "<", "1", "b", "<=", "2", "c", ">=", "3", "d", ">", "4", "left", "||", "right"],
+        )
+
     def test_rewrites_operator_compat_expressions(self):
-        forms = parse("tot = plus(a b) when(!flag && a == b ok)", filename="sample.il")
+        forms = parse("tot = plus(a b) when(!flag && a == b || total >= limit ok)", filename="sample.il")
         assignment = forms[0]
         self.assertEqual(assignment.items[0].name, "setq")
         self.assertEqual(assignment.items[1].name, "tot")
@@ -89,9 +103,12 @@ class ParserTests(unittest.TestCase):
         when_form = forms[1]
         self.assertEqual(when_form.items[0].name, "when")
         condition = when_form.items[1]
-        self.assertEqual(condition.items[0].name, "and")
-        self.assertEqual(condition.items[1].items[0].name, "not")
-        self.assertEqual(condition.items[2].items[0].name, "equal")
+        self.assertEqual(condition.items[0].name, "or")
+        and_form = condition.items[1]
+        self.assertEqual(and_form.items[0].name, "and")
+        self.assertEqual(and_form.items[1].items[0].name, "not")
+        self.assertEqual(and_form.items[2].items[0].name, "equal")
+        self.assertEqual(condition.items[2].items[0].name, ">=")
 
     def test_preserves_prefix_equals_calls(self):
         forms = parse("(= 3 3)", filename="sample.il")
@@ -105,6 +122,13 @@ class ParserTests(unittest.TestCase):
         multiply = forms[0].items[2]
         self.assertEqual(multiply.items[0].name, "times")
         self.assertEqual([item.name for item in multiply.items[1:]], ["b", "c"])
+
+    def test_rewrites_infix_comparisons_inside_if(self):
+        forms = parse('if(a < b + c then println("x") else println("y"))', filename="sample.il")
+        condition = forms[0].items[1]
+        self.assertEqual(condition.items[0].name, "<")
+        self.assertEqual(condition.items[1].name, "a")
+        self.assertEqual(condition.items[2].items[0].name, "plus")
 
     def test_rewrites_unary_minus(self):
         forms = parse("-a a + -b a - b - c", filename="sample.il")
@@ -259,6 +283,80 @@ class EvaluatorTests(unittest.TestCase):
         )
         self.assertEqual(value, 45)
         self.assertEqual(session.output, ['"hello world"'])
+
+    def test_classic_if_then_else_operator_syntax(self):
+        session = SkillSession()
+        value = session.eval_text(
+            """
+            a = 1
+            hit1 = if((a < 1) then println("wrong"))
+            hit2 = if((a < 2) then println("right"))
+            hit3 = if(a < 2 then println("then branch") else println("else branch"))
+            hit4 = if(a < 1 then println("wrong") else println("fallback"))
+            list(hit1 hit2 hit3 hit4)
+            """
+        )
+        self.assertEqual(value, [None, True, True, True])
+        self.assertEqual(session.output, ['"right"', '"then branch"', '"fallback"'])
+
+    def test_if_without_then_still_supports_infix_conditions(self):
+        session = SkillSession()
+        value = session.eval_text(
+            """
+            a = 1
+            list(
+              if(a < 2 11 22)
+              if(a > 2 11 22)
+              when(a <= 1 println("when branch"))
+              unless(a >= 2 println("unless branch")))
+            """
+        )
+        self.assertEqual(value, [11, 22, True, True])
+        self.assertEqual(session.output, ['"when branch"', '"unless branch"'])
+
+    def test_logical_or_and_comparisons_in_classic_syntax(self):
+        session = SkillSession()
+        value = session.eval_text(
+            """
+            a = 1
+            b = 3
+            if(a > 2 || b >= 3 then
+              println("matched")
+              99
+            else
+              0)
+            """
+        )
+        self.assertEqual(value, 99)
+        self.assertEqual(session.output, ['"matched"'])
+
+    def test_tight_operator_syntax_matches_skill_examples(self):
+        session = SkillSession()
+        value = session.eval_text(
+            """
+            procedure(fib(n)
+              if((n == 1 || n == 2) then
+                1
+              else
+                fib(n-1) + fib(n-2)))
+            a = 2
+            b = 3
+            c = 5
+            x = 2
+            y = 3
+            z = 4
+            A = 1
+            x1 = 2
+            B = 1
+            y1 = 3
+            C = 1
+            list(
+              fib(4)
+              if(x<y+z && y<z+x && z<x+y then 'triangle else 'bad)
+              if(A*x1+B*y1+C != 0.0 then 'nonzero else 'zero))
+            """
+        )
+        self.assertEqual(format_value(value), "(3 triangle nonzero)")
 
     def test_cond_and_defun(self):
         session = SkillSession()

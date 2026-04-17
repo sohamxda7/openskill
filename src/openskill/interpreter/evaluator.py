@@ -580,6 +580,10 @@ def _eval_let(form, env, session):
     return _eval_sequence(form.items[2:], let_env, session)
 
 
+def _is_symbol_named(form, name):
+    return isinstance(form, SymbolForm) and form.name == name
+
+
 def _eval_lambda(form, env):
     if len(form.items) < 3:
         raise SkillEvalError("lambda requires parameters and body", form=form)
@@ -927,11 +931,26 @@ def evaluate(form, env, session):
                 raise SkillEvalError("quasiquote expects one value", form=form)
             return eval_quasiquote(form.items[1], env, session)
         if head.name == "if":
+            if len(form.items) < 3:
+                raise SkillEvalError("if expects condition, then, optional else", form=form)
+            condition_value = evaluate(form.items[1], env, session)
+            if len(form.items) > 3 and _is_symbol_named(form.items[2], "then"):
+                else_index = None
+                for index, item in enumerate(form.items[3:], start=3):
+                    if _is_symbol_named(item, "else"):
+                        else_index = index
+                        break
+                then_forms = form.items[3:else_index] if else_index is not None else form.items[3:]
+                else_forms = form.items[else_index + 1 :] if else_index is not None else []
+                if not then_forms:
+                    raise SkillEvalError("if requires at least one then expression", form=form)
+                if else_index is not None and not else_forms:
+                    raise SkillEvalError("if requires at least one else expression", form=form)
+                branch_forms = then_forms if is_truthy(condition_value) else else_forms
+                return None if not branch_forms else _eval_sequence(branch_forms, env, session)
             if len(form.items) not in (3, 4):
                 raise SkillEvalError("if expects condition, then, optional else", form=form)
-            branch = form.items[2] if is_truthy(evaluate(form.items[1], env, session)) else (
-                form.items[3] if len(form.items) == 4 else None
-            )
+            branch = form.items[2] if is_truthy(condition_value) else (form.items[3] if len(form.items) == 4 else None)
             return None if branch is None else evaluate(branch, env, session)
         if head.name == "when":
             if len(form.items) < 3:

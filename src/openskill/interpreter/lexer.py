@@ -14,13 +14,27 @@ def _is_token_boundary(char):
     return char == "" or char in "();'`,\" \t\r\n"
 
 
+def _is_identifier_letter(char):
+    return char.isalpha() or char in "_?"
+
+
 def _is_arithmetic_operator(source, index):
     char = source[index]
-    if char not in "+-*/":
+    if char in "+*/":
+        return True
+    if char != "-":
         return False
     prev_char = source[index - 1] if index > 0 else ""
     next_char = source[index + 1] if index + 1 < len(source) else ""
-    return _is_token_boundary(prev_char) or _is_token_boundary(next_char)
+    if _is_token_boundary(prev_char) or _is_token_boundary(next_char):
+        return True
+    if _is_identifier_letter(prev_char) and _is_identifier_letter(next_char):
+        return False
+    return True
+
+
+def _starts_multi_char_operator(source, index):
+    return any(source.startswith(operator, index) for operator in ("&&", "||", "==", "!=", "<=", ">=", "->"))
 
 
 def tokenize(source, filename="<string>"):
@@ -124,28 +138,31 @@ def tokenize(source, filename="<string>"):
                 )
             tokens.append(Token("STRING", "".join(chars), start_line, start_col, filename))
             continue
-        if source.startswith("&&", index):
-            tokens.append(Token("SYMBOL", "&&", line, column, filename))
-            index += 2
-            column += 2
-            continue
-        if source.startswith("==", index):
-            tokens.append(Token("SYMBOL", "==", line, column, filename))
-            index += 2
-            column += 2
-            continue
-        if source.startswith("!=", index):
-            tokens.append(Token("SYMBOL", "!=", line, column, filename))
-            index += 2
-            column += 2
-            continue
-        if source.startswith("->", index):
-            tokens.append(Token("ARROW", "->", line, column, filename))
-            index += 2
-            column += 2
+        for operator, kind in (
+            ("&&", "SYMBOL"),
+            ("||", "SYMBOL"),
+            ("==", "SYMBOL"),
+            ("!=", "SYMBOL"),
+            ("<=", "SYMBOL"),
+            (">=", "SYMBOL"),
+            ("->", "ARROW"),
+        ):
+            if source.startswith(operator, index):
+                tokens.append(Token(kind, operator, line, column, filename))
+                index += len(operator)
+                column += len(operator)
+                break
+        else:
+            operator = None
+        if operator is not None:
             continue
         if _is_arithmetic_operator(source, index):
             tokens.append(Token("OPERATOR", char, line, column, filename))
+            index += 1
+            column += 1
+            continue
+        if char in "<>":
+            tokens.append(Token("SYMBOL", char, line, column, filename))
             index += 1
             column += 1
             continue
@@ -162,16 +179,11 @@ def tokenize(source, filename="<string>"):
         start = index
         start_col = column
         while index < length and source[index] not in "();'`,\" \t\r\n":
-            if (
-                source.startswith("&&", index)
-                or source.startswith("==", index)
-                or source.startswith("!=", index)
-                or source.startswith("->", index)
-            ):
+            if _starts_multi_char_operator(source, index):
                 break
             if _is_arithmetic_operator(source, index):
                 break
-            if source[index] == "!":
+            if source[index] in "!<>":
                 break
             if source[index] == "=" and source[index - 1] not in "<>":
                 break

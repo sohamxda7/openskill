@@ -188,15 +188,16 @@ OpenSKILL reads code as expressions. Most code is written as parenthesized prefi
 (if (> width 5) "wide" "narrow")
 ```
 
-Arithmetic can also be written with infix `+ - * /`:
+Operator-style expressions can also be written in classic SKILL form:
 
 ```skill
 width * height
 sum + 1
 total / 4
+if(count <= limit && !done then println("go") else println("stop"))
 ```
 
-That infix support is intentionally narrow: use it for arithmetic only. Other operator-style compatibility remains limited to the already-supported subset such as `=`, `==`, `!=`, `&&`, and prefix `!`.
+OpenSKILL accepts the common SKILL operator surface for arithmetic, comparison, equality, assignment, and boolean conditions, including tight forms such as `fib(n-1)` and `x<y+z`.
 
 Classic SKILL immediate-paren calls are also accepted when the `(` touches the symbol with no whitespace:
 

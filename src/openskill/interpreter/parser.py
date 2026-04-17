@@ -1,19 +1,59 @@
 import re
 
+from openskill.interpreter.evaluator import create_global_env
 from openskill.interpreter.errors import SkillSyntaxError
 from openskill.interpreter.forms import ListForm, NumberForm, StringForm, SymbolForm
 from openskill.interpreter.lexer import tokenize
 
 INTEGER_RE = re.compile(r"^[+-]?[0-9]+$")
 FLOAT_RE = re.compile(r"^[+-]?(?:[0-9]+\.[0-9]*|\.[0-9]+)$")
+KNOWN_CALL_HEADS = set(create_global_env().values.keys()) | {
+    "quote",
+    "quasiquote",
+    "if",
+    "when",
+    "unless",
+    "progn",
+    "let",
+    "setq",
+    "lambda",
+    "procedure",
+    "case",
+    "caseq",
+    "cond",
+    "catch",
+    "throw",
+    "foreach",
+    "for",
+    "exists",
+    "forall",
+    "prog",
+    "prog1",
+    "prog2",
+    "return",
+    "defun",
+    "defclass",
+    "defmacro",
+    "nprocedure",
+    "mprocedure",
+    "errset",
+    "while",
+    "and",
+    "or",
+}
 
 
 class Parser(object):
     INFIX_PRECEDENCE = {
         "=": 10,
+        "||": 15,
         "&&": 20,
         "==": 30,
         "!=": 30,
+        "<": 30,
+        "<=": 30,
+        ">": 30,
+        ">=": 30,
         "+": 40,
         "-": 40,
         "*": 50,
@@ -44,6 +84,9 @@ class Parser(object):
 
     def parse_expression(self, minimum_precedence=0):
         left = self._parse_postfix(self.parse_prefix())
+        return self._parse_expression_tail(left, minimum_precedence)
+
+    def _parse_expression_tail(self, left, minimum_precedence=0):
         while True:
             operator = self._peek_infix_operator()
             if operator is None:
@@ -96,7 +139,40 @@ class Parser(object):
 
     def parse_list(self):
         start = self.consume()
-        items = self._parse_list_items(start, parse_head=True)
+        if self.peek().kind == "RPAREN":
+            self.consume()
+            return ListForm([], start.line, start.column, start.filename)
+
+        first = self._parse_postfix(self.parse_primary())
+        if self._peek_infix_operator() is not None and not self._is_known_call_head(first):
+            grouped = self._parse_expression_tail(first)
+            if self.peek().kind == "RPAREN":
+                self.consume()
+                return grouped
+            items = [grouped]
+            while self.peek().kind != "RPAREN":
+                if self.peek().kind == "EOF":
+                    raise SkillSyntaxError(
+                        "unterminated list",
+                        filename=start.filename,
+                        line=start.line,
+                        column=start.column,
+                    )
+                items.append(self.parse_expression())
+            self.consume()
+            return ListForm(items, start.line, start.column, start.filename)
+
+        items = [first]
+        while self.peek().kind != "RPAREN":
+            if self.peek().kind == "EOF":
+                raise SkillSyntaxError(
+                    "unterminated list",
+                    filename=start.filename,
+                    line=start.line,
+                    column=start.column,
+                )
+            items.append(self.parse_expression())
+        self.consume()
         return ListForm(items, start.line, start.column, start.filename)
 
     def _parse_list_items(self, start, parse_head=False):
@@ -179,6 +255,9 @@ class Parser(object):
             return None
         if token.text not in self.INFIX_PRECEDENCE:
             return None
+        next_token = self.tokens[self.index + 1]
+        if next_token.kind in ("RPAREN", "EOF"):
+            return None
         return token
 
     def _rewrite_prefix(self, operator, value):
@@ -206,8 +285,13 @@ class Parser(object):
                 )
         else:
             symbol_name = {
+                "||": "or",
                 "==": "equal",
                 "!=": "nequal",
+                "<": "<",
+                "<=": "<=",
+                ">": ">",
+                ">=": ">=",
                 "&&": "and",
                 "+": "plus",
                 "-": "difference",
@@ -219,6 +303,9 @@ class Parser(object):
         if symbol_name == "and" and isinstance(left, ListForm) and left.items and isinstance(left.items[0], SymbolForm):
             if left.items[0].name == "and":
                 return ListForm(left.items + [right], left.line, left.column, left.filename)
+        if symbol_name == "or" and isinstance(left, ListForm) and left.items and isinstance(left.items[0], SymbolForm):
+            if left.items[0].name == "or":
+                return ListForm(left.items + [right], left.line, left.column, left.filename)
         return ListForm([symbol] + args, operator.line, operator.column, operator.filename)
 
     def _is_slot_access(self, form):
@@ -228,6 +315,9 @@ class Parser(object):
             and isinstance(form.items[0], SymbolForm)
             and form.items[0].name == "->"
         )
+
+    def _is_known_call_head(self, form):
+        return isinstance(form, SymbolForm) and form.name in KNOWN_CALL_HEADS
 
 
 def parse(source, filename="<string>"):

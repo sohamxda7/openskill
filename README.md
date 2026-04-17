@@ -79,10 +79,11 @@ Each push to `main` creates a new prerelease snapshot with commit-based versioni
 - Reader, parser, and evaluator for a growing standalone-safe core SKILL surface
 - File execution, one-shot expressions, and a REPL
 - Offline API catalog for the commands currently implemented
-- Desktop shell with editor, console, REPL, and API Finder
+- Desktop shell with editor, console, REPL, API Finder, line numbers, bracket matching, rainbow brackets, and autocomplete
 - Runnable examples for arithmetic, procedures, lists, strings, Fibonacci, and a simple state machine
 - Core language areas including bindings, procedures, macros, conditionals, loops, lists, strings, tables, arrays, printing, file/port utilities, and a minimal SKILL++ object layer
 - Prefix forms, classic immediate-paren calls such as `println("hello")`, infix arithmetic with `+ - * /`, table helpers such as `tableToList`, and object syntax such as `defclass`, `makeInstance`, and `obj->slot`
+- Self-contained catalog examples that are exercised by the test suite against every documented symbol
 
 OpenSKILL is **not** a full core-SKILL-complete environment yet, but it already covers a broad standalone-safe subset with **200+ documented commands/forms** in the offline catalog.
 
@@ -136,3 +137,5 @@ This project is distributed under **GPL-3.0-or-later**. See `LICENSE` for the fu
 ```bash
 python3 -m unittest discover -s tests
 ```
+
+That suite now checks the interpreter/runtime behavior, starter examples, and every catalog example entry.

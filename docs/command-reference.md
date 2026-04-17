@@ -1,5 +1,6 @@
 # OpenSKILL Command Reference
 This reference is a browsable snapshot of the offline catalog used by the CLI, REPL, and GUI API finder. It is generated from `src/openskill/api/catalog.json`.
+The catalog examples are written as runnable snippets, and the test suite executes every documented entry.
 Use `openskill api find QUERY` or `:api QUERY` in the REPL when you want to search by name.
 ## Arithmetic
 | Symbol | Signature | Summary |

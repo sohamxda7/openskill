@@ -8,7 +8,7 @@ OpenSKILL is a standalone workbench for writing and running a practical subset o
 
 - a file runner for `.il` scripts
 - a command-line REPL
-- a desktop shell with editor, console, REPL, and API search
+- a desktop shell with editor assistance, console, REPL, and API search
 - an offline API catalog backed by `src/openskill/api/catalog.json`
 
 It is useful for learning SKILL syntax, prototyping standalone scripts, and looking up supported commands locally.
@@ -145,6 +145,8 @@ PYTHONPATH=src python3 -m openskill.ui.app
 The desktop shell includes:
 
 - an editor tab with a Run button
+- line numbers, matching-bracket highlight, and rainbow bracket colors in the editor
+- command/procedure autocomplete in the editor with `Tab` or `Ctrl+Space`
 - a console pane for output and errors
 - a REPL tab for line-by-line evaluation
 - an API Finder panel for local command lookup
@@ -462,15 +464,19 @@ See [`docs/command-reference.md`](command-reference.md), which is organized from
 
 If you want the raw source of truth used by the finder, inspect `src/openskill/api/catalog.json`.
 
+The catalog examples are written to run as standalone snippets, and the test suite executes every documented example entry.
+
 ## 11. Desktop shell quick walkthrough
 
 When you open the GUI:
 
 1. Type or open a `.il` file in the editor tab.
-2. Click **Run** to evaluate the full editor buffer.
-3. Use the lower console pane to read results or errors.
-4. Switch to the **REPL** tab for quick single-line experiments.
-5. Use **API Finder** on the right to search symbols, signatures, summaries, return shapes, and examples.
+2. Use the line-number gutter, bracket colors, and matching-bracket highlight to keep nested code readable.
+3. Press **Tab** or **Ctrl+Space** to autocomplete built-in commands and procedures/classes defined in the current buffer.
+4. Click **Run** to evaluate the full editor buffer.
+5. Use the lower console pane to read results or errors.
+6. Switch to the **REPL** tab for quick single-line experiments.
+7. Use **API Finder** on the right to search symbols, signatures, summaries, return shapes, and examples.
 
 The GUI is best for learning and experimentation. The CLI is usually faster for automation and script runs.
 

@@ -1,5 +1,6 @@
 import os
 import sys
+import tempfile
 import unittest
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
@@ -9,6 +10,7 @@ if ROOT not in sys.path:
 from openskill.apifinder.index import load_index, search
 from openskill.interpreter.evaluator import create_global_env
 from openskill.interpreter.parser import parse
+from openskill.interpreter.runtime import SkillSession
 
 
 SPECIAL_FORMS = {
@@ -259,6 +261,18 @@ class CatalogTests(unittest.TestCase):
             self.assertTrue(entry["signature"])
             self.assertIsInstance(entry["tags"], list)
             parse(entry["example"], filename="<catalog-example>")
+
+    def test_catalog_examples_execute(self):
+        for entry in load_index():
+            with self.subTest(symbol=entry["symbol"]):
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    session = SkillSession(cwd=temp_dir)
+                    previous_cwd = os.getcwd()
+                    try:
+                        os.chdir(temp_dir)
+                        session.eval_text(entry["example"], filename="<catalog-example>")
+                    finally:
+                        os.chdir(previous_cwd)
 
     def test_catalog_symbols_resolve_to_special_forms_or_runtime_bindings(self):
         runtime_symbols = set(create_global_env().values.keys())

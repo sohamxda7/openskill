@@ -153,9 +153,9 @@ The desktop shell includes:
 
 The repository now includes real starter scripts in [`examples/`](../examples/):
 
+- [`examples/arithmetic.il`](../examples/arithmetic.il) - infix arithmetic with `+ - * /` and list output
+- [`examples/procedure.il`](../examples/procedure.il) - `defun`, `procedure`, and computed return data
 - [`examples/hello.il`](../examples/hello.il) - simplest greeting and `procedure`
-- [`examples/arithmetic.il`](../examples/arithmetic.il) - numeric helpers and list output
-- [`examples/procedure.il`](../examples/procedure.il) - `defun`, `procedure`, and returned data
 - [`examples/control-flow.il`](../examples/control-flow.il) - `setq`, `for`, and `cond`
 - [`examples/lists.il`](../examples/lists.il) - quoting, list operations, and printing
 - [`examples/ports.il`](../examples/ports.il) - string ports, formatted output, and input reading
@@ -163,13 +163,13 @@ The repository now includes real starter scripts in [`examples/`](../examples/):
 Run any of them with:
 
 ```bash
-openskill examples/hello.il
+openskill examples/arithmetic.il
 ```
 
 If you are using the repository checkout directly:
 
 ```bash
-PYTHONPATH=src python3 -m openskill.cli examples/hello.il
+PYTHONPATH=src python3 -m openskill.cli examples/arithmetic.il
 ```
 
 ## 6. Language model: how SKILL code is read here
@@ -181,6 +181,16 @@ OpenSKILL reads code as expressions. Most code is written as parenthesized prefi
 (setq width 10)
 (if (> width 5) "wide" "narrow")
 ```
+
+Arithmetic can also be written with infix `+ - * /`:
+
+```skill
+width * height
+sum + 1
+total / 4
+```
+
+That infix support is intentionally narrow: use it for arithmetic only. Other operator-style compatibility remains limited to the already-supported subset such as `=`, `==`, `!=`, `&&`, and prefix `!`.
 
 Classic SKILL immediate-paren calls are also accepted when the `(` touches the symbol with no whitespace:
 
@@ -397,8 +407,8 @@ The GUI is best for learning and experimentation. The CLI is usually faster for 
 
 ## 12. Common beginner workflow
 
-1. Start with `examples/hello.il`.
-2. Move to `examples/control-flow.il` and `examples/lists.il`.
+1. Start with `examples/arithmetic.il`.
+2. Move to `examples/procedure.il`, then `examples/control-flow.il` and `examples/lists.il`.
 3. Use `openskill --expr '...'` for quick one-liners.
 4. Keep a REPL open and use `:api name` when you forget a command.
 5. Move repeated code into procedures or separate `.il` files loaded with `load`.

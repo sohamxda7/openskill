@@ -56,6 +56,22 @@ class ParserTests(unittest.TestCase):
         tokens = tokenize("!variable !=", filename="sample.il")
         self.assertEqual([token.text for token in tokens[:-1]], ["!", "variable", "!="])
 
+    def test_lexes_arithmetic_operators_as_separate_tokens(self):
+        tokens = tokenize("a + b * c / -d", filename="sample.il")
+        self.assertEqual(
+            [(token.kind, token.text) for token in tokens[:-1]],
+            [
+                ("SYMBOL", "a"),
+                ("OPERATOR", "+"),
+                ("SYMBOL", "b"),
+                ("OPERATOR", "*"),
+                ("SYMBOL", "c"),
+                ("OPERATOR", "/"),
+                ("OPERATOR", "-"),
+                ("SYMBOL", "d"),
+            ],
+        )
+
     def test_rewrites_operator_compat_expressions(self):
         forms = parse("tot = plus(a b) when(!flag && a == b ok)", filename="sample.il")
         assignment = forms[0]
@@ -74,6 +90,38 @@ class ParserTests(unittest.TestCase):
         forms = parse("(= 3 3)", filename="sample.il")
         self.assertEqual(forms[0].items[0].name, "=")
         self.assertEqual([item.value for item in forms[0].items[1:]], [3, 3])
+
+    def test_rewrites_infix_arithmetic_with_precedence(self):
+        forms = parse("a + b * c", filename="sample.il")
+        self.assertEqual(forms[0].items[0].name, "plus")
+        self.assertEqual(forms[0].items[1].name, "a")
+        multiply = forms[0].items[2]
+        self.assertEqual(multiply.items[0].name, "times")
+        self.assertEqual([item.name for item in multiply.items[1:]], ["b", "c"])
+
+    def test_rewrites_unary_minus(self):
+        forms = parse("-a a + -b a - b - c", filename="sample.il")
+        self.assertEqual(forms[0].items[0].name, "difference")
+        self.assertEqual(forms[0].items[1].name, "a")
+
+        plus_form = forms[1]
+        self.assertEqual(plus_form.items[0].name, "plus")
+        self.assertEqual(plus_form.items[1].name, "a")
+        self.assertEqual(plus_form.items[2].items[0].name, "difference")
+        self.assertEqual(plus_form.items[2].items[1].name, "b")
+
+        chained = forms[2]
+        self.assertEqual(chained.items[0].name, "difference")
+        self.assertEqual(chained.items[1].items[0].name, "difference")
+        self.assertEqual([item.name for item in chained.items[1].items[1:]], ["a", "b"])
+        self.assertEqual(chained.items[2].name, "c")
+
+    def test_preserves_prefix_arithmetic_calls(self):
+        forms = parse("(+ 1 2) (- 5 3)", filename="sample.il")
+        self.assertEqual(forms[0].items[0].name, "+")
+        self.assertEqual([item.value for item in forms[0].items[1:]], [1, 2])
+        self.assertEqual(forms[1].items[0].name, "-")
+        self.assertEqual([item.value for item in forms[1].items[1:]], [5, 3])
 
 
 class EvaluatorTests(unittest.TestCase):
@@ -205,6 +253,37 @@ class EvaluatorTests(unittest.TestCase):
             """
         )
         self.assertEqual(format_value(value), "(7 t t t t t)")
+
+    def test_infix_arithmetic_evaluation(self):
+        session = SkillSession()
+        value = session.eval_text(
+            """
+            a = 12
+            b = a + a
+            b
+            """
+        )
+        self.assertEqual(value, 24)
+
+    def test_infix_arithmetic_operators(self):
+        session = SkillSession()
+        value = session.eval_text(
+            """
+            a = 10
+            b = 4
+            c = 2
+            list(
+              a + b
+              a + b * c
+              a - b
+              -a
+              a + -b
+              a - b - c
+              (+ a b)
+              (- a b))
+            """
+        )
+        self.assertEqual(format_value(value), "(14 18 6 -10 6 4 14 6)")
 
     def test_string_and_numeric_helpers(self):
         session = SkillSession()

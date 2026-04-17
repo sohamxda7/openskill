@@ -10,6 +10,19 @@ class Token(object):
         self.filename = filename
 
 
+def _is_token_boundary(char):
+    return char == "" or char in "();'`,\" \t\r\n"
+
+
+def _is_arithmetic_operator(source, index):
+    char = source[index]
+    if char not in "+-*/":
+        return False
+    prev_char = source[index - 1] if index > 0 else ""
+    next_char = source[index + 1] if index + 1 < len(source) else ""
+    return _is_token_boundary(prev_char) or _is_token_boundary(next_char)
+
+
 def tokenize(source, filename="<string>"):
     tokens = []
     index = 0
@@ -126,6 +139,11 @@ def tokenize(source, filename="<string>"):
             index += 2
             column += 2
             continue
+        if _is_arithmetic_operator(source, index):
+            tokens.append(Token("OPERATOR", char, line, column, filename))
+            index += 1
+            column += 1
+            continue
         if char == "=":
             tokens.append(Token("SYMBOL", "=", line, column, filename))
             index += 1
@@ -140,6 +158,8 @@ def tokenize(source, filename="<string>"):
         start_col = column
         while index < length and source[index] not in "();'`,\" \t\r\n":
             if source.startswith("&&", index) or source.startswith("==", index) or source.startswith("!=", index):
+                break
+            if _is_arithmetic_operator(source, index):
                 break
             if source[index] == "!":
                 break

@@ -1,6 +1,6 @@
 ; Define and call small reusable procedures.
 (defun areaRect (width height)
-  (* width height))
+  width * height)
 
 (procedure (describeRect width height)
   (println

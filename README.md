@@ -80,7 +80,7 @@ Each push to `main` creates a new prerelease snapshot with commit-based versioni
 - Offline API catalog for the commands currently implemented
 - Desktop shell with editor, console, REPL, and API Finder
 - Core language areas including bindings, procedures, macros, conditionals, loops, lists, strings, tables, arrays, printing, and file/port utilities
-- Classic immediate-paren call syntax such as `println("hello")` in addition to prefix forms
+- Prefix forms, classic immediate-paren calls such as `println("hello")`, and infix arithmetic with `+ - * /`
 
 OpenSKILL is **not** a full core-SKILL-complete environment yet, but it already covers a broad standalone-safe subset with **200+ documented commands/forms** in the offline catalog.
 

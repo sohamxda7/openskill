@@ -14,7 +14,12 @@ class Parser(object):
         "&&": 20,
         "==": 30,
         "!=": 30,
+        "+": 40,
+        "-": 40,
+        "*": 50,
+        "/": 50,
     }
+    PREFIX_PRECEDENCE = 60
 
     def __init__(self, tokens):
         self.tokens = tokens
@@ -43,6 +48,8 @@ class Parser(object):
             operator = self._peek_infix_operator()
             if operator is None:
                 return left
+            if operator.line != left.line:
+                return left
             precedence = self.INFIX_PRECEDENCE[operator.text]
             if precedence < minimum_precedence:
                 return left
@@ -52,9 +59,9 @@ class Parser(object):
 
     def parse_prefix(self):
         token = self.peek()
-        if token.kind == "SYMBOL" and token.text == "!":
+        if token.kind in ("SYMBOL", "OPERATOR") and token.text in ("!", "-"):
             operator = self.consume()
-            value = self.parse_expression(40)
+            value = self.parse_expression(self.PREFIX_PRECEDENCE)
             return self._rewrite_prefix(operator, value)
         return self.parse_primary()
 
@@ -67,7 +74,7 @@ class Parser(object):
         if token.kind == "STRING":
             self.consume()
             return StringForm(token.text, token.line, token.column, token.filename)
-        if token.kind == "SYMBOL":
+        if token.kind in ("SYMBOL", "OPERATOR"):
             self.consume()
             atom = self._atom_form(token)
             if isinstance(atom, SymbolForm) and self._has_immediate_lparen(token):
@@ -89,11 +96,20 @@ class Parser(object):
 
     def parse_list(self):
         start = self.consume()
-        items = self._parse_list_items(start)
+        items = self._parse_list_items(start, parse_head=True)
         return ListForm(items, start.line, start.column, start.filename)
 
-    def _parse_list_items(self, start):
+    def _parse_list_items(self, start, parse_head=False):
         items = []
+        if self.peek().kind == "EOF":
+            raise SkillSyntaxError(
+                "unterminated list",
+                filename=start.filename,
+                line=start.line,
+                column=start.column,
+            )
+        if self.peek().kind != "RPAREN":
+            items.append(self.parse_primary() if parse_head else self.parse_expression())
         while self.peek().kind != "RPAREN":
             if self.peek().kind == "EOF":
                 raise SkillSyntaxError(
@@ -141,14 +157,18 @@ class Parser(object):
 
     def _peek_infix_operator(self):
         token = self.peek()
-        if token.kind != "SYMBOL":
+        if token.kind not in ("SYMBOL", "OPERATOR"):
             return None
         if token.text not in self.INFIX_PRECEDENCE:
             return None
         return token
 
     def _rewrite_prefix(self, operator, value):
-        symbol = SymbolForm("not", operator.line, operator.column, operator.filename)
+        symbol_name = {
+            "!": "not",
+            "-": "difference",
+        }[operator.text]
+        symbol = SymbolForm(symbol_name, operator.line, operator.column, operator.filename)
         return ListForm([symbol, value], operator.line, operator.column, operator.filename)
 
     def _rewrite_infix(self, operator, left, right):
@@ -166,6 +186,10 @@ class Parser(object):
                 "==": "equal",
                 "!=": "nequal",
                 "&&": "and",
+                "+": "plus",
+                "-": "difference",
+                "*": "times",
+                "/": "quotient",
             }[operator.text]
         symbol = SymbolForm(symbol_name, operator.line, operator.column, operator.filename)
         if symbol_name == "and" and isinstance(left, ListForm) and left.items and isinstance(left.items[0], SymbolForm):

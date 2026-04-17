@@ -34,6 +34,7 @@ SPECIAL_FORMS = {
     "prog2",
     "return",
     "defun",
+    "defclass",
     "defmacro",
     "nprocedure",
     "mprocedure",
@@ -43,6 +44,7 @@ SPECIAL_FORMS = {
     "or",
     "exists",
     "forall",
+    "->",
 }
 
 
@@ -66,6 +68,7 @@ class CatalogTests(unittest.TestCase):
             "catch",
             "throw",
             "procedure",
+            "defclass",
             "lambda",
             "defun",
             "defmacro",
@@ -127,6 +130,8 @@ class CatalogTests(unittest.TestCase):
             "get",
             "putprop",
             "remprop",
+            "makeInstance",
+            "->",
             "integerp",
             "fixp",
             "typep",
@@ -187,6 +192,9 @@ class CatalogTests(unittest.TestCase):
             "makeTable",
             "put",
             "tablep",
+            "tableToList",
+            "getTableKeys",
+            "removeTableEntry",
             "infile",
             "outfile",
             "instring",

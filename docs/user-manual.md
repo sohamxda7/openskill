@@ -151,14 +151,18 @@ The desktop shell includes:
 
 ## 5. Runnable starter examples
 
-The repository now includes real starter scripts in [`examples/`](../examples/):
+The repository includes real starter scripts in [`examples/`](../examples/) that are meant to be copied, run, and edited:
 
-- [`examples/arithmetic.il`](../examples/arithmetic.il) - infix arithmetic with `+ - * /` and list output
-- [`examples/procedure.il`](../examples/procedure.il) - `defun`, `procedure`, and computed return data
 - [`examples/hello.il`](../examples/hello.il) - simplest greeting and `procedure`
+- [`examples/arithmetic.il`](../examples/arithmetic.il) - infix arithmetic with `+ - * /` and numeric helpers
+- [`examples/procedure.il`](../examples/procedure.il) - `defun`, `procedure`, and computed return data
 - [`examples/control-flow.il`](../examples/control-flow.il) - `setq`, `for`, and `cond`
 - [`examples/lists.il`](../examples/lists.il) - quoting, list operations, and printing
+- [`examples/list-manipulation.il`](../examples/list-manipulation.il) - `car`, `cdr`, `append1`, `reverse`, and `mapcar`
+- [`examples/string-processing.il`](../examples/string-processing.il) - tokenizing text, case conversion, slicing, and formatting
 - [`examples/ports.il`](../examples/ports.il) - string ports, formatted output, and input reading
+- [`examples/fibonacci.il`](../examples/fibonacci.il) - procedures, loops, and list growth
+- [`examples/state-machine.il`](../examples/state-machine.il) - a small event-driven state machine with `caseq`
 
 Run any of them with:
 
@@ -199,6 +203,8 @@ println("hello world")
 plus(1 2)
 let(((x 1) (y 2)) plus(x y))
 ```
+
+OpenSKILL also accepts `name = expr` as a compatibility rewrite for assignment, and `obj->slot` / `obj->slot = value` for the currently supported slot-access surface.
 
 A file may contain many top-level forms. They are evaluated in order.
 
@@ -288,7 +294,7 @@ Define callable code with `procedure`, `defun`, or `lambda`:
 
 ### Question-mark names and parameter keywords
 
-Names like `?x` are accepted as normal symbols, so code such as this works today:
+Names like `?x` are accepted as symbols, so code such as this works:
 
 ```skill
 (progn
@@ -296,7 +302,14 @@ Names like `?x` are accepted as normal symbols, so code such as this works today
   (+ ?x 1))
 ```
 
-At the moment, OpenSKILL does **not** document a separate keyword-argument calling convention beyond ordinary symbol names and positional arguments. If you use `?name`-style identifiers, treat them as normal symbols in the current implementation.
+The current object layer also uses `?name` forms as initarg keys for `makeInstance`:
+
+```skill
+(defclass point () ((x @initarg ?x @initform 0)))
+(makeInstance 'point ?x 7)
+```
+
+Outside APIs that explicitly consume them, `?name` values still behave like ordinary symbol names.
 
 ## 8. Core programming patterns
 
@@ -325,6 +338,13 @@ At the moment, OpenSKILL does **not** document a separate keyword-argument calli
   (setq count (+ count 1)))
 ```
 
+`foreach` can also walk table keys in insertion order:
+
+```skill
+(foreach key tbl
+  (println (list key (get tbl key))))
+```
+
 ### Lists
 
 ```skill
@@ -341,6 +361,55 @@ At the moment, OpenSKILL does **not** document a separate keyword-argument calli
 (strcat "pin_" 'A)
 (strlen "hello")
 ```
+
+### Tables
+
+```skill
+(let ((tbl (makeTable "pins" 0)))
+  (put tbl 'vin 1)
+  (put tbl 'vout 2)
+  (println (getTableKeys tbl))
+  (println (tableToList tbl))
+  (removeTableEntry tbl 'vin)
+  (foreach key tbl
+    (println (list key (get tbl key)))))
+```
+
+Current table helpers include:
+
+- `makeTable` to allocate a table
+- `put` and `get` to store and read values
+- `getTableKeys` to inspect current keys
+- `tableToList` to flatten a table into alternating key/value data
+- `removeTableEntry` to delete one key
+- `foreach` over a table to iterate keys
+
+### Minimal SKILL++ object support
+
+OpenSKILL now includes a small SKILL++-style object layer for common teaching and experimentation cases:
+
+```skill
+(defclass point () ((x @initarg ?x @initform 0)
+                    (y @initarg ?y @initform 0)))
+
+(let ((p (makeInstance 'point ?x 3)))
+  p->y = 9
+  (list p->x p->y))
+```
+
+Current scope:
+
+- `defclass` with single inheritance
+- `makeInstance`
+- slot options `@initarg` and `@initform`
+- `obj->slot` and `obj->slot = value`
+- the same `->` syntax for symbol property lists such as `chip->width = 10`
+
+Current limits:
+
+- no multiple inheritance
+- no generic functions or methods
+- no `@reader` / `@writer` support
 
 ### Loading code from another file
 
@@ -407,11 +476,13 @@ The GUI is best for learning and experimentation. The CLI is usually faster for 
 
 ## 12. Common beginner workflow
 
-1. Start with `examples/arithmetic.il`.
-2. Move to `examples/procedure.il`, then `examples/control-flow.il` and `examples/lists.il`.
-3. Use `openskill --expr '...'` for quick one-liners.
-4. Keep a REPL open and use `:api name` when you forget a command.
-5. Move repeated code into procedures or separate `.il` files loaded with `load`.
+1. Start with `examples/hello.il` and `examples/arithmetic.il`.
+2. Move to `examples/procedure.il`, `examples/control-flow.il`, and `examples/lists.il`.
+3. Continue with `examples/list-manipulation.il` and `examples/string-processing.il`.
+4. Use `examples/fibonacci.il` and `examples/state-machine.il` when you want slightly larger runnable patterns.
+5. Use `openskill --expr '...'` for quick one-liners.
+6. Keep a REPL open and use `:api name` when you forget a command.
+7. Move repeated code into procedures, classes, or separate `.il` files loaded with `load`.
 
 ## 13. Current boundaries and expectations
 
@@ -420,5 +491,7 @@ OpenSKILL already covers a useful standalone subset, but the command surface is 
 - `openskill api find <name>`
 - `:api <name>` in the REPL
 - [`docs/command-reference.md`](command-reference.md)
+
+The current object model is intentionally small: use it for `defclass`, `makeInstance`, slot defaults, and `->` access, but do not expect full SKILL++ method or metaobject coverage yet.
 
 That keeps your scripts aligned with what this repository actually implements today.

@@ -139,6 +139,11 @@ def tokenize(source, filename="<string>"):
             index += 2
             column += 2
             continue
+        if source.startswith("->", index):
+            tokens.append(Token("ARROW", "->", line, column, filename))
+            index += 2
+            column += 2
+            continue
         if _is_arithmetic_operator(source, index):
             tokens.append(Token("OPERATOR", char, line, column, filename))
             index += 1
@@ -157,7 +162,12 @@ def tokenize(source, filename="<string>"):
         start = index
         start_col = column
         while index < length and source[index] not in "();'`,\" \t\r\n":
-            if source.startswith("&&", index) or source.startswith("==", index) or source.startswith("!=", index):
+            if (
+                source.startswith("&&", index)
+                or source.startswith("==", index)
+                or source.startswith("!=", index)
+                or source.startswith("->", index)
+            ):
                 break
             if _is_arithmetic_operator(source, index):
                 break

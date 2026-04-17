@@ -7,7 +7,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from openskill.interpreter.errors import SkillSyntaxError
+from openskill.interpreter.errors import SkillEvalError, SkillSyntaxError
 from openskill.interpreter.lexer import tokenize
 from openskill.interpreter.parser import parse
 from openskill.interpreter.runtime import SkillSession, format_value
@@ -72,6 +72,13 @@ class ParserTests(unittest.TestCase):
             ],
         )
 
+    def test_lexes_arrow_slot_access(self):
+        tokens = tokenize("obj->slot = 1", filename="sample.il")
+        self.assertEqual(
+            [(token.kind, token.text) for token in tokens[:-1]],
+            [("SYMBOL", "obj"), ("ARROW", "->"), ("SYMBOL", "slot"), ("SYMBOL", "="), ("SYMBOL", "1")],
+        )
+
     def test_rewrites_operator_compat_expressions(self):
         forms = parse("tot = plus(a b) when(!flag && a == b ok)", filename="sample.il")
         assignment = forms[0]
@@ -123,8 +130,42 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(forms[1].items[0].name, "-")
         self.assertEqual([item.value for item in forms[1].items[1:]], [5, 3])
 
+    def test_rewrites_slot_access_and_assignment(self):
+        forms = parse("inst->x inst->x = 3", filename="sample.il")
+        self.assertEqual(forms[0].items[0].name, "->")
+        self.assertEqual(forms[0].items[1].name, "inst")
+        self.assertEqual(forms[0].items[2].name, "x")
+        self.assertEqual(forms[1].items[0].name, "->=")
+        self.assertEqual(forms[1].items[1].name, "inst")
+        self.assertEqual(forms[1].items[2].name, "x")
+        self.assertEqual(forms[1].items[3].value, 3)
+
+    def test_rejects_invalid_slot_rewrite(self):
+        with self.assertRaises(SkillSyntaxError):
+            parse("inst->(x)", filename="sample.il")
+
 
 class EvaluatorTests(unittest.TestCase):
+    def test_examples_load_from_repo_root(self):
+        repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+        example_names = [
+            "hello.il",
+            "arithmetic.il",
+            "control-flow.il",
+            "lists.il",
+            "ports.il",
+            "procedure.il",
+            "fibonacci.il",
+            "list-manipulation.il",
+            "string-processing.il",
+            "state-machine.il",
+        ]
+        for example_name in example_names:
+            with self.subTest(example=example_name):
+                session = SkillSession(cwd=repo_root)
+                session.load_file(os.path.join("examples", example_name))
+                self.assertTrue(session.output)
+
     def test_let_and_arithmetic(self):
         session = SkillSession()
         value = session.eval_text("(let ((x 2) (y 5)) (+ x y))")
@@ -419,6 +460,91 @@ class EvaluatorTests(unittest.TestCase):
             ),
             "(t 11 0)",
         )
+        self.assertEqual(
+            format_value(
+                session.eval_text(
+                    """
+                    (let ((tbl (makeTable "pins" 0)))
+                      (put tbl 'a 11)
+                      (put tbl "b" 12)
+                      (put tbl '(c d) 13)
+                      (list
+                        (tableToList tbl)
+                        (getTableKeys tbl)
+                        (removeTableEntry tbl "b")
+                        (removeTableEntry tbl "missing")
+                        (tableToList tbl)
+                        (getTableKeys tbl)
+                        (get tbl "b")))
+                    """
+                )
+            ),
+            "((a 11 \"b\" 12 (c d) 13) (a \"b\" (c d)) t nil (a 11 (c d) 13) (a (c d)) 0)",
+        )
+        self.assertEqual(
+            format_value(session.eval_text("(let ((tbl (makeTable \"pins\"))) (list (tableToList tbl) (getTableKeys tbl)))")),
+            "(nil nil)",
+        )
+        self.assertEqual(
+            format_value(
+                session.eval_text(
+                    """
+                    (let ((tbl (makeTable "pins" 0))
+                          (seen nil))
+                      (put tbl 'a 11)
+                      (put tbl "b" 12)
+                      (put tbl '(c d) 13)
+                      (list
+                        (eq (foreach key tbl
+                              (setq seen (append1 seen key)))
+                            tbl)
+                        seen
+                        (let ((empty (makeTable "empty")))
+                          (eq (foreach key empty
+                                (error "should not run"))
+                              empty))))
+                    """
+                )
+            ),
+            "(t (a \"b\" (c d)) t)",
+        )
+        self.assertEqual(
+            format_value(
+                session.eval_text(
+                    """
+                    (let ((tbl (makeTable "pins" 0)))
+                      (put tbl (list "symbol" "foo") 99)
+                      (list (getTableKeys tbl) (tableToList tbl)))
+                    """
+                )
+            ),
+            '((("symbol" "foo")) (("symbol" "foo") 99))',
+        )
+        self.assertEqual(
+            format_value(
+                session.eval_text(
+                    """
+                    (list
+                      (let ((tbl (makeTable "pins" 0))
+                            (seen nil))
+                        (put tbl 'a 1)
+                        (put tbl 'b 2)
+                        (foreach key tbl
+                          (setq seen (append1 seen key))
+                          (removeTableEntry tbl key))
+                        (list seen (getTableKeys tbl)))
+                      (let ((tbl (makeTable "pins" 0))
+                            (seen nil))
+                        (put tbl 'a 1)
+                        (foreach key tbl
+                          (setq seen (append1 seen key))
+                          (put tbl 'b 2))
+                        (list seen (getTableKeys tbl))))
+                    """
+                )
+            ),
+            "(((a b) nil) ((a) (a b)))",
+        )
 
     def test_port_and_file_helpers(self):
         session = SkillSession()
@@ -501,6 +627,62 @@ class EvaluatorTests(unittest.TestCase):
             self.assertEqual(value[5], [temp_dir])
             self.assertTrue(session.eval_text('(deleteFile "%s")' % filepath.replace("\\", "\\\\")))
             self.assertIsNone(session.eval_text('(isFile "%s")' % filepath.replace("\\", "\\\\")))
+
+    def test_skillpp_class_definition_and_defaults(self):
+        session = SkillSession()
+        value = session.eval_text(
+            """
+            (defclass point () ((x @initarg ?x @initform 0) (y @initarg ?y @initform 2)))
+            (let ((p (makeInstance 'point ?x 7)))
+              (list (type p) p->x p->y))
+            """
+        )
+        self.assertEqual(format_value(value), "(point 7 2)")
+
+    def test_skillpp_inheritance_and_slot_writes(self):
+        session = SkillSession()
+        value = session.eval_text(
+            """
+            (defclass point () ((x @initarg ?x @initform 0) (y @initarg ?y @initform 0)))
+            (defclass colorPoint (point) ((color @initarg ?color @initform "red")))
+            (let ((p (makeInstance 'colorPoint ?x 3)))
+              (progn
+                p->y = 9
+                p->color = "blue"
+                (list p->x p->y p->color)))
+            """
+        )
+        self.assertEqual(format_value(value), '(3 9 "blue")')
+
+    def test_skillpp_symbol_plist_slot_surface(self):
+        session = SkillSession()
+        value = session.eval_text(
+            """
+            chip->width = 10
+            (let ((alias 'chip))
+              (list chip->width alias->width (get 'chip 'width)))
+            """
+        )
+        self.assertEqual(format_value(value), "(10 10 10)")
+
+    def test_skillpp_rejects_unsupported_and_invalid_forms(self):
+        session = SkillSession()
+        with self.assertRaises(SkillEvalError) as multiple:
+            session.eval_text("(defclass bad (a b) ())")
+        self.assertIn("multiple inheritance", str(multiple.exception))
+
+        with self.assertRaises(SkillEvalError) as reader:
+            session.eval_text("(defclass bad () ((x @reader readX)))")
+        self.assertIn("@reader", str(reader.exception))
+
+        session.eval_text("(defclass point () ((x @initarg ?x)))")
+        with self.assertRaises(SkillEvalError) as initarg:
+            session.eval_text("(makeInstance 'point ?y 1)")
+        self.assertIn("unknown initarg", str(initarg.exception))
+
+        with self.assertRaises(SkillEvalError) as target:
+            session.eval_text("(progn (setq count 3) count->x)")
+        self.assertIn("slot access requires", str(target.exception))
 
     def test_additional_port_helpers(self):
         session = SkillSession()

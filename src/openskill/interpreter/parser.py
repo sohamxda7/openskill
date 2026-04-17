@@ -43,7 +43,7 @@ class Parser(object):
         return self.parse_expression()
 
     def parse_expression(self, minimum_precedence=0):
-        left = self.parse_prefix()
+        left = self._parse_postfix(self.parse_prefix())
         while True:
             operator = self._peek_infix_operator()
             if operator is None:
@@ -155,6 +155,24 @@ class Parser(object):
         items.extend(self._parse_list_items(start))
         return ListForm(items, token.line, token.column, token.filename)
 
+    def _parse_postfix(self, left):
+        while True:
+            token = self.peek()
+            if token.kind != "ARROW" or token.line != left.line:
+                return left
+            operator = self.consume()
+            slot = self.peek()
+            if slot.kind != "SYMBOL" or slot.line != operator.line:
+                raise SkillSyntaxError(
+                    "slot access expects a slot name",
+                    filename=operator.filename,
+                    line=operator.line,
+                    column=operator.column,
+                )
+            slot_form = self._atom_form(self.consume())
+            head = SymbolForm("->", operator.line, operator.column, operator.filename)
+            left = ListForm([head, left, slot_form], operator.line, operator.column, operator.filename)
+
     def _peek_infix_operator(self):
         token = self.peek()
         if token.kind not in ("SYMBOL", "OPERATOR"):
@@ -173,14 +191,19 @@ class Parser(object):
 
     def _rewrite_infix(self, operator, left, right):
         if operator.text == "=":
-            if not isinstance(left, SymbolForm):
+            if isinstance(left, SymbolForm):
+                symbol_name = "setq"
+                args = [left, right]
+            elif self._is_slot_access(left):
+                symbol_name = "->="
+                args = [left.items[1], left.items[2], right]
+            else:
                 raise SkillSyntaxError(
-                    "assignment target must be a symbol",
+                    "assignment target must be a symbol or slot access",
                     filename=operator.filename,
                     line=operator.line,
                     column=operator.column,
                 )
-            symbol_name = "setq"
         else:
             symbol_name = {
                 "==": "equal",
@@ -191,11 +214,20 @@ class Parser(object):
                 "*": "times",
                 "/": "quotient",
             }[operator.text]
+            args = [left, right]
         symbol = SymbolForm(symbol_name, operator.line, operator.column, operator.filename)
         if symbol_name == "and" and isinstance(left, ListForm) and left.items and isinstance(left.items[0], SymbolForm):
             if left.items[0].name == "and":
                 return ListForm(left.items + [right], left.line, left.column, left.filename)
-        return ListForm([symbol, left, right], operator.line, operator.column, operator.filename)
+        return ListForm([symbol] + args, operator.line, operator.column, operator.filename)
+
+    def _is_slot_access(self, form):
+        return (
+            isinstance(form, ListForm)
+            and len(form.items) == 3
+            and isinstance(form.items[0], SymbolForm)
+            and form.items[0].name == "->"
+        )
 
 
 def parse(source, filename="<string>"):

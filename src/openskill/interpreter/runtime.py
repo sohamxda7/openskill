@@ -13,6 +13,7 @@ class SkillSession(object):
         self.current_env = self.global_env
         self._load_stack = [self.cwd]
         self.symbol_plists = {}
+        self.class_registry = {}
         self.gensym_counter = 0
         self.random_state = random.Random(0)
         self.warnings = []

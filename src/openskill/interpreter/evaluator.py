@@ -98,6 +98,19 @@ class SkillPort(object):
             self.handle = None
 
 
+class SkillClass(object):
+    def __init__(self, name, base_class, slots):
+        self.name = name
+        self.base_class = base_class
+        self.slots = slots
+
+
+class SkillInstance(object):
+    def __init__(self, skill_class, slot_values):
+        self.skill_class = skill_class
+        self.slot_values = slot_values
+
+
 class ReturnFromProg(Exception):
     def __init__(self, value):
         self.value = value
@@ -186,6 +199,10 @@ def format_value(value):
         return "<regex %s>" % value.pattern
     if isinstance(value, SkillPort):
         return "<port %s>" % value.mode
+    if isinstance(value, SkillClass):
+        return "<class %s>" % value.name
+    if isinstance(value, SkillInstance):
+        return "<instance %s>" % value.skill_class.name
     return str(value)
 
 
@@ -372,11 +389,22 @@ def _eval_sequence(forms, env, session):
     return result
 
 
+_SYMBOL_KEY_TAG = object()
+
+
 def _plist_key(value):
     if isinstance(value, SkillSymbolValue):
-        return ("symbol", value.name)
+        return (_SYMBOL_KEY_TAG, value.name)
     if isinstance(value, list):
         return tuple(_plist_key(item) for item in value)
+    return value
+
+
+def _plist_key_to_value(value):
+    if isinstance(value, tuple):
+        if len(value) == 2 and value[0] is _SYMBOL_KEY_TAG:
+            return SkillSymbolValue(value[1])
+        return [_plist_key_to_value(item) for item in value]
     return value
 
 
@@ -447,6 +475,86 @@ def _plist_remove(session, symbol_name, indicator):
         index += 2
     session.symbol_plists[symbol_name] = items
     return None
+
+
+def _resolve_class_reference(session, value, name, form=None):
+    if isinstance(value, SkillClass):
+        return value
+    if not isinstance(value, SkillSymbolValue):
+        raise SkillEvalError("%s expects a class or quoted class name" % name, form=form)
+    skill_class = session.class_registry.get(value.name)
+    if skill_class is None:
+        raise SkillEvalError("unknown class `%s`" % value.name, form=form)
+    return skill_class
+
+
+def _compile_class_slots(slots_form):
+    if not isinstance(slots_form, ListForm):
+        raise SkillEvalError("defclass slot list must be a list", form=slots_form)
+    compiled = []
+    seen = set()
+    for slot_form in slots_form.items:
+        if isinstance(slot_form, SymbolForm):
+            slot_name = slot_form.name
+            spec = {"name": slot_name, "initarg": None, "initform": None}
+        elif isinstance(slot_form, ListForm) and slot_form.items:
+            slot_name = _ensure_symbol(slot_form.items[0])
+            spec = {"name": slot_name, "initarg": None, "initform": None}
+            index = 1
+            while index < len(slot_form.items):
+                option_form = slot_form.items[index]
+                option_name = _ensure_symbol(option_form)
+                if option_name in ("@reader", "@writer"):
+                    raise SkillEvalError("%s is not supported in defclass MVP" % option_name, form=option_form)
+                if option_name not in ("@initarg", "@initform"):
+                    raise SkillEvalError("unsupported slot option `%s`" % option_name, form=option_form)
+                if index + 1 >= len(slot_form.items):
+                    raise SkillEvalError("slot option `%s` requires a value" % option_name, form=option_form)
+                value_form = slot_form.items[index + 1]
+                if option_name == "@initarg":
+                    if not isinstance(value_form, SymbolForm) or not value_form.name.startswith("?"):
+                        raise SkillEvalError("@initarg expects a ?keyword symbol", form=value_form)
+                    spec["initarg"] = value_form.name
+                else:
+                    spec["initform"] = value_form
+                index += 2
+        else:
+            raise SkillEvalError("invalid slot specification", form=slot_form)
+        if slot_name in seen:
+            raise SkillEvalError("duplicate slot `%s`" % slot_name, form=slot_form)
+        seen.add(slot_name)
+        compiled.append(spec)
+    return compiled
+
+
+def _evaluate_slot_target(form, env, session):
+    if isinstance(form, SymbolForm):
+        try:
+            return env.get(form.name, form=form)
+        except SkillEvalError:
+            return SkillSymbolValue(form.name)
+    return evaluate(form, env, session)
+
+
+def _get_slot_value(session, target, slot_name, form):
+    if isinstance(target, SkillInstance):
+        if slot_name not in target.skill_class.slots:
+            raise SkillEvalError("unknown slot `%s` on class `%s`" % (slot_name, target.skill_class.name), form=form)
+        return target.slot_values.get(slot_name)
+    if isinstance(target, SkillSymbolValue):
+        return _plist_lookup(session, target.name, SkillSymbolValue(slot_name))
+    raise SkillEvalError("slot access requires a symbol plist or class instance", form=form)
+
+
+def _set_slot_value(session, target, slot_name, value, form):
+    if isinstance(target, SkillInstance):
+        if slot_name not in target.skill_class.slots:
+            raise SkillEvalError("unknown slot `%s` on class `%s`" % (slot_name, target.skill_class.name), form=form)
+        target.slot_values[slot_name] = value
+        return value
+    if isinstance(target, SkillSymbolValue):
+        return _plist_put(session, target.name, SkillSymbolValue(slot_name), value)
+    raise SkillEvalError("slot assignment requires a symbol plist or class instance", form=form)
 
 
 def _eval_let(form, env, session):
@@ -561,8 +669,15 @@ def _eval_foreach(form, env, session):
     values = evaluate(form.items[2], env, session)
     if values is None:
         return None
+    if isinstance(values, SkillTable):
+        loop_env = Environment(parent=env)
+        loop_env.define(name, None)
+        for key in list(values.data.keys()):
+            loop_env.set(name, _plist_key_to_value(key))
+            _eval_sequence(form.items[3:], loop_env, session)
+        return values
     if not isinstance(values, list):
-        raise SkillEvalError("foreach expects a list", form=form.items[2])
+        raise SkillEvalError("foreach expects a list or table", form=form.items[2])
     loop_env = Environment(parent=env)
     loop_env.define(name, None)
     for value in values:
@@ -598,6 +713,35 @@ def _eval_defun(form, env):
     proc = SkillProcedure(name, _compile_params(params_form), form.items[3:], env)
     env.set(name, proc)
     return proc
+
+
+def _eval_defclass(form, env, session):
+    if len(form.items) != 4:
+        raise SkillEvalError("defclass requires a name, superclass list, and slot list", form=form)
+    name = _ensure_symbol(form.items[1])
+    bases_form = form.items[2]
+    if not isinstance(bases_form, ListForm):
+        raise SkillEvalError("defclass superclasses must be a list", form=bases_form)
+    if len(bases_form.items) > 1:
+        raise SkillEvalError("multiple inheritance is not supported", form=bases_form)
+    base_class = None
+    if bases_form.items:
+        base_name = _ensure_symbol(bases_form.items[0])
+        base_class = session.class_registry.get(base_name)
+        if base_class is None:
+            try:
+                base_class = env.get(base_name, form=bases_form.items[0])
+            except SkillEvalError:
+                base_class = None
+        if not isinstance(base_class, SkillClass):
+            raise SkillEvalError("unknown superclass `%s`" % base_name, form=bases_form.items[0])
+    slots = dict(base_class.slots) if base_class is not None else {}
+    for slot in _compile_class_slots(form.items[3]):
+        slots[slot["name"]] = slot
+    skill_class = SkillClass(name, base_class, slots)
+    session.class_registry[name] = skill_class
+    env.set(name, skill_class)
+    return skill_class
 
 
 def _eval_defmacro(form, env):
@@ -641,6 +785,14 @@ def _evaluate_call_arg(form, env, session):
 
 
 def _evaluate_procedure_call_args(operator, arg_forms, env, session):
+    if isinstance(operator, BuiltinFunction) and operator.name == "makeInstance":
+        args = []
+        for index, form in enumerate(arg_forms):
+            if index > 0 and index % 2 == 1 and isinstance(form, SymbolForm) and form.name.startswith("?"):
+                args.append(SkillSymbolValue(form.name))
+            else:
+                args.append(_evaluate_call_arg(form, env, session))
+        return args
     if not isinstance(operator, SkillProcedure) or not operator.params["key"]:
         return [_evaluate_call_arg(arg, env, session) for arg in arg_forms]
     args = []
@@ -824,6 +976,8 @@ def evaluate(form, env, session):
             raise ReturnFromProg(value)
         if head.name == "defun":
             return _eval_defun(form, env)
+        if head.name == "defclass":
+            return _eval_defclass(form, env, session)
         if head.name == "defmacro":
             return _eval_defmacro(form, env)
         if head.name == "nprocedure":
@@ -876,6 +1030,21 @@ def evaluate(form, env, session):
             if target_name is not None:
                 env.set(target_name, text)
             return text
+        if head.name == "->":
+            if len(form.items) != 3:
+                raise SkillEvalError("-> expects a target and slot name", form=form)
+            return _get_slot_value(session, _evaluate_slot_target(form.items[1], env, session), _ensure_symbol(form.items[2]), form)
+        if head.name == "->=":
+            if len(form.items) != 4:
+                raise SkillEvalError("->= expects a target, slot name, and value", form=form)
+            value = evaluate(form.items[3], env, session)
+            return _set_slot_value(
+                session,
+                _evaluate_slot_target(form.items[1], env, session),
+                _ensure_symbol(form.items[2]),
+                value,
+                form,
+            )
     operator = evaluate(head, env, session)
     if isinstance(operator, SkillMacro):
         expansion = operator.expand(session, env, form.items[1:], full_form=form)
@@ -1304,6 +1473,10 @@ def _builtin_type(session, *args):
         return SkillSymbolValue("array")
     if isinstance(value, SkillSymbolValue):
         return SkillSymbolValue("symbol")
+    if isinstance(value, SkillClass):
+        return SkillSymbolValue("class")
+    if isinstance(value, SkillInstance):
+        return SkillSymbolValue(value.skill_class.name)
     if isinstance(value, (BuiltinFunction, SkillProcedure, SkillMacro)):
         return SkillSymbolValue("function")
     return SkillSymbolValue(type(value).__name__)
@@ -1383,6 +1556,39 @@ def _builtin_setplist(session, *args):
     values = _ensure_list_value(args[1], "setplist")
     stored = _set_plist_for_symbol(session, symbol_name, values)
     return stored if stored else None
+
+
+def _builtin_make_instance(session, *args):
+    if not args:
+        raise SkillEvalError("makeInstance expects a class and optional initargs")
+    skill_class = _resolve_class_reference(session, args[0], "makeInstance")
+    if (len(args) - 1) % 2 != 0:
+        raise SkillEvalError("makeInstance expects ?initarg/value pairs")
+    provided = {}
+    index = 1
+    while index < len(args):
+        initarg = args[index]
+        if not isinstance(initarg, SkillSymbolValue) or not initarg.name.startswith("?"):
+            raise SkillEvalError("makeInstance expects ?initarg/value pairs")
+        if initarg.name in provided:
+            raise SkillEvalError("duplicate initarg `%s`" % initarg.name)
+        provided[initarg.name] = args[index + 1]
+        index += 2
+    env = getattr(session, "current_env", None) or session.global_env
+    slot_values = {}
+    used = set()
+    for slot_name, spec in skill_class.slots.items():
+        if spec["initarg"] is not None and spec["initarg"] in provided:
+            slot_values[slot_name] = provided[spec["initarg"]]
+            used.add(spec["initarg"])
+        elif spec["initform"] is not None:
+            slot_values[slot_name] = evaluate(spec["initform"], env, session)
+        else:
+            slot_values[slot_name] = None
+    unknown = [name for name in provided if name not in used]
+    if unknown:
+        raise SkillEvalError("unknown initarg `%s`" % unknown[0])
+    return SkillInstance(skill_class, slot_values)
 
 
 def _builtin_get(session, *args):
@@ -1917,6 +2123,37 @@ def _builtin_tablep(session, *args):
     return True if isinstance(args[0], SkillTable) else None
 
 
+def _builtin_table_to_list(session, *args):
+    _require_args("tableToList", args, exact=1)
+    table = args[0]
+    if not isinstance(table, SkillTable):
+        raise SkillEvalError("tableToList expects a table")
+    values = []
+    for key, value in table.data.items():
+        values.extend([_plist_key_to_value(key), value])
+    return values
+
+
+def _builtin_get_table_keys(session, *args):
+    _require_args("getTableKeys", args, exact=1)
+    table = args[0]
+    if not isinstance(table, SkillTable):
+        raise SkillEvalError("getTableKeys expects a table")
+    return [_plist_key_to_value(key) for key in table.data.keys()]
+
+
+def _builtin_remove_table_entry(session, *args):
+    _require_args("removeTableEntry", args, exact=2)
+    table, key = args
+    if not isinstance(table, SkillTable):
+        raise SkillEvalError("removeTableEntry expects a table")
+    normalized = _plist_key(key)
+    if normalized not in table.data:
+        return None
+    del table.data[normalized]
+    return True
+
+
 def _builtin_infile(session, *args):
     _require_args("infile", args, exact=1)
     return SkillPort(open(args[0], "r"), "input")
@@ -2371,6 +2608,7 @@ def create_global_env():
         "symbolName": _builtin_symbol_name,
         "plist": _builtin_plist,
         "setplist": _builtin_setplist,
+        "makeInstance": _builtin_make_instance,
         "get": _builtin_get,
         "getq": _builtin_getq,
         "getqq": _builtin_getqq,
@@ -2487,6 +2725,9 @@ def create_global_env():
         "makeTable": _builtin_make_table,
         "put": _builtin_put,
         "tablep": _builtin_tablep,
+        "tableToList": _builtin_table_to_list,
+        "getTableKeys": _builtin_get_table_keys,
+        "removeTableEntry": _builtin_remove_table_entry,
         "infile": _builtin_infile,
         "outfile": _builtin_outfile,
         "instring": _builtin_instring,

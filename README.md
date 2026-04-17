@@ -1,6 +1,6 @@
 # OpenSKILL - Run, Learn, and Explore SKILL Without Cadence Installed
 
-OpenSKILL is an easy way to run SKILL locally, learn SKILL programming, and explore an offline SKILL reference on your own computer without Cadence installed.
+OpenSKILL lets you run SKILL locally, learn the language, and search an offline reference on your own computer without Cadence installed.
 
 It gives EDA engineers, custom IC teams, chip design learners, and student-friendly lab environments a practical **Cadence-free** setup for **EDA scripting**: a standalone SKILL interpreter, REPL, desktop shell, and **SKILL IDE** for Linux or Windows. The interpreter logic and bundled reference content are original work created for this project.
 
@@ -54,8 +54,9 @@ PYTHONPATH=src python3 -m openskill.ui.app
 ## Why EDA users care
 
 - Run core SKILL scripts locally without a Cadence license checkout
-- Learn SKILL syntax, control flow, list processing, macros, and file I/O in one place
+- Learn SKILL syntax, control flow, lists, strings, tables, and file I/O in one place
 - Search an offline SKILL reference while you code
+- Try beginner-friendly runnable examples before moving to your own scripts
 - Download single-file CLI and IDE binaries from GitHub Releases
 - Use it as a teaching, experimentation, and scripting workbench for custom IC, chip design, and EDA workflows
 
@@ -79,8 +80,9 @@ Each push to `main` creates a new prerelease snapshot with commit-based versioni
 - File execution, one-shot expressions, and a REPL
 - Offline API catalog for the commands currently implemented
 - Desktop shell with editor, console, REPL, and API Finder
-- Core language areas including bindings, procedures, macros, conditionals, loops, lists, strings, tables, arrays, printing, and file/port utilities
-- Prefix forms, classic immediate-paren calls such as `println("hello")`, and infix arithmetic with `+ - * /`
+- Runnable examples for arithmetic, procedures, lists, strings, Fibonacci, and a simple state machine
+- Core language areas including bindings, procedures, macros, conditionals, loops, lists, strings, tables, arrays, printing, file/port utilities, and a minimal SKILL++ object layer
+- Prefix forms, classic immediate-paren calls such as `println("hello")`, infix arithmetic with `+ - * /`, table helpers such as `tableToList`, and object syntax such as `defclass`, `makeInstance`, and `obj->slot`
 
 OpenSKILL is **not** a full core-SKILL-complete environment yet, but it already covers a broad standalone-safe subset with **200+ documented commands/forms** in the offline catalog.
 

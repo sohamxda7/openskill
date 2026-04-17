@@ -82,6 +82,7 @@ Use `openskill api find QUERY` or `:api QUERY` in the REPL when you want to sear
 ## Definition
 | Symbol | Signature | Summary |
 | --- | --- | --- |
+| `defclass` | `(defclass name (superclass) ((slot @initarg ?key @initform value) ...))` | Define a minimal SKILL++ class with single inheritance and slot defaults. |
 | `defmacro` | `(defmacro name (arg1 arg2 ... \| @rest args) body...)` | Define a macro that receives unevaluated forms and returns expansion data. |
 | `defun` | `(defun name (arg1 arg2 ...) body...)` | Define a named procedure using a function-style declaration. |
 | `lambda` | `(lambda (arg1 arg2 ...) body...)` | Create an anonymous callable for passing behavior around. |
@@ -198,7 +199,7 @@ Use `openskill api find QUERY` or `:api QUERY` in the REPL when you want to sear
 | Symbol | Signature | Summary |
 | --- | --- | --- |
 | `for` | `(for sym start end body...)` | Iterate from start to end, including the end value. |
-| `foreach` | `(foreach sym list body...)` | Walk each item in a list and bind it to a loop symbol. |
+| `foreach` | `(foreach sym sequence body...)` | Walk each item in a list, or each key in a table, and bind it to a loop symbol. |
 | `while` | `(while test body...)` | Repeat a body while the test expression stays truthy. |
 
 ## Meta
@@ -212,6 +213,12 @@ Use `openskill api find QUERY` or `:api QUERY` in the REPL when you want to sear
 | `putd` | `(putd 'symbol callable)` | Store a callable under a quoted symbol name. |
 | `symbolName` | `(symbolName 'symbol)` | Return the printable name of a symbol. |
 | `symeval` | `(symeval 'symbol)` | Read the current value stored under a quoted symbol. |
+
+## Object
+| Symbol | Signature | Summary |
+| --- | --- | --- |
+| `->` | `obj->slot or obj->slot = value` | Read or write a symbol plist entry or class instance slot using arrow surface syntax. |
+| `makeInstance` | `(makeInstance 'className ?initarg value ...)` | Instantiate a defclass-defined class using supported initargs and initforms. |
 
 ## Output
 | Symbol | Signature | Summary |
@@ -315,6 +322,8 @@ Use `openskill api find QUERY` or `:api QUERY` in the REPL when you want to sear
 ## Table
 | Symbol | Signature | Summary |
 | --- | --- | --- |
+| `getTableKeys` | `(getTableKeys table)` | Return the keys currently stored in a table in insertion order. |
 | `makeTable` | `(makeTable name [default])` | Allocate a table with an optional default value for missing keys. |
 | `put` | `(put table key value)` | Store a value under a table key. |
-
+| `removeTableEntry` | `(removeTableEntry table key)` | Delete one key from a table if it exists. |
+| `tableToList` | `(tableToList table)` | Flatten table contents into a plist-style key/value list in insertion order. |

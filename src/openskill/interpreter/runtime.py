@@ -19,8 +19,11 @@ class SkillSession(object):
         self.random_state = random.Random(0)
         self.warnings = []
         self.skill_path = [self.cwd]
+        self.max_loop_iterations = 100000
+        self.loop_iterations = 0
 
     def eval_text(self, source, filename="<string>"):
+        self.loop_iterations = 0
         forms = parse(source, filename=filename)
         result = None
         for form in forms:

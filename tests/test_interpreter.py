@@ -170,6 +170,8 @@ class EvaluatorTests(unittest.TestCase):
         session = SkillSession()
         value = session.eval_text("(let ((x 2) (y 5)) (+ x y))")
         self.assertEqual(value, 7)
+        self.assertIsNone(session.eval_text("(errset (/ 1 0))"))
+        self.assertIsNone(session.eval_text('(errset (+ "a" 1))'))
 
     def test_procedure_definition(self):
         session = SkillSession()
@@ -218,6 +220,7 @@ class EvaluatorTests(unittest.TestCase):
         self.assertEqual(session.eval_text("x"), 0)
         self.assertEqual(session.eval_text("(or nil 7)"), 7)
         self.assertEqual(session.eval_text("(nth 1 '(10 20 30))"), 20)
+        self.assertIsNone(session.eval_text("(nth 99 '(10 20 30))"))
         self.assertEqual(format_value(session.eval_text("(last '(10 20 30))")), "(30)")
         self.assertEqual(format_value(session.eval_text("(reverse '(1 2 3))")), "(3 2 1)")
         self.assertEqual(format_value(session.eval_text("(append1 '(1 2) 3)")), "(1 2 3)")
@@ -335,6 +338,9 @@ class EvaluatorTests(unittest.TestCase):
             "v=7",
         )
         self.assertEqual(session.eval_text('(let ((fmt "v=%d")) (sprintf fmt 7))'), "v=7")
+        self.assertEqual(session.eval_text('(sprintf "100%%")'), "100%")
+        with self.assertRaises(SkillEvalError):
+            session.eval_text('(sprintf "%d %d" 1)')
         self.assertEqual(session.eval_text('(strlen "hello")'), 5)
         self.assertEqual(session.eval_text('(strcmp "abc" "abd")'), -1)
         self.assertEqual(session.eval_text('(substr "abcdef" 2 3)'), "cde")
@@ -355,8 +361,9 @@ class EvaluatorTests(unittest.TestCase):
     def test_errset_warn_and_higher_order_helpers(self):
         session = SkillSession()
         self.assertIsNone(session.eval_text('(errset (error "boom"))'))
+        self.assertIsNone(session.eval_text("(errset (arrayref (array 1) 9))"))
         self.assertIsNone(session.eval_text('(errset (load "missing.il"))'))
-        self.assertIsNone(session.eval_text('(errset (deleteFile "missing.txt"))'))
+        self.assertEqual(session.eval_text('(errset (deleteFile "missing.txt"))'), [None])
         self.assertTrue(session.eval_text('(warn "careful")'))
         self.assertIn("Warning: careful", session.output[-1])
         self.assertEqual(session.eval_text("(getWarn)"), "careful")
@@ -452,6 +459,8 @@ class EvaluatorTests(unittest.TestCase):
             ),
             "(t 9)",
         )
+        with self.assertRaises(SkillEvalError):
+            session.eval_text("(let ((a (array 3 0))) (arrayref a 10))")
         self.assertIsNone(session.eval_text("(arrayp '(1 2 3))"))
         self.assertIsNone(session.eval_text("(listp (array 2 0))"))
         self.assertEqual(
@@ -642,6 +651,7 @@ class EvaluatorTests(unittest.TestCase):
             self.assertEqual(value[5], [temp_dir])
             self.assertTrue(session.eval_text('(deleteFile "%s")' % filepath.replace("\\", "\\\\")))
             self.assertIsNone(session.eval_text('(isFile "%s")' % filepath.replace("\\", "\\\\")))
+            self.assertIsNone(session.eval_text('(deleteFile "%s")' % filepath.replace("\\", "\\\\")))
         with tempfile.TemporaryDirectory() as temp_dir:
             examples_dir = os.path.join(temp_dir, "examples")
             os.makedirs(examples_dir)
@@ -823,6 +833,28 @@ class EvaluatorTests(unittest.TestCase):
         self.assertEqual(session.eval_text('(index "bc" "abcdef")'), 2)
         self.assertEqual(session.eval_text('(rindex "bc" "zbcxbc")'), 5)
         self.assertEqual(session.eval_text('(nindex "bc" "zbcxbc" 3)'), 5)
+
+    def test_lambda_closures_capture_lexical_state(self):
+        session = SkillSession()
+        result = session.eval_text(
+            """
+            (setq makeCounter
+              (lambda ()
+                (let ((count 0))
+                  (lambda ()
+                    (setq count (+ count 1))
+                    count))))
+            (setq c (makeCounter))
+            (list (c) (c))
+            """
+        )
+        self.assertEqual(result, [1, 2])
+
+    def test_while_loop_has_iteration_guard(self):
+        session = SkillSession()
+        with self.assertRaises(SkillEvalError) as ctx:
+            session.eval_text("(while t nil)")
+        self.assertIn("maximum iteration limit", str(ctx.exception))
 
     def test_binding_removal_helpers(self):
         session = SkillSession()

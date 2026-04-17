@@ -33,14 +33,16 @@ class BuiltinFunction(object):
 
 
 class SkillProcedure(object):
-    def __init__(self, name, params, body, env):
+    def __init__(self, name, params, body, env, lexical=False):
         self.name = name
         self.params = params
         self.body = body
         self.env = env
+        self.lexical = lexical
 
     def invoke(self, session, caller_env, *args):
-        call_env = Environment(parent=caller_env)
+        parent_env = self.env if self.lexical else caller_env
+        call_env = Environment(parent=parent_env)
         _bind_arguments(self.name, self.params, args, call_env, session)
         result = None
         for form in self.body:
@@ -584,7 +586,7 @@ def _eval_lambda(form, env):
     params_form = form.items[1]
     if not isinstance(params_form, ListForm):
         raise SkillEvalError("lambda parameters must be a list", form=params_form)
-    return SkillProcedure("<lambda>", _compile_params(params_form), form.items[2:], env)
+    return SkillProcedure("<lambda>", _compile_params(params_form), form.items[2:], env, lexical=True)
 
 
 def _eval_procedure(form, env):
@@ -681,6 +683,7 @@ def _eval_foreach(form, env, session):
     loop_env = Environment(parent=env)
     loop_env.define(name, None)
     for value in values:
+        _consume_loop_iteration(session, "foreach")
         loop_env.set(name, value)
         _eval_sequence(form.items[3:], loop_env, session)
     return values
@@ -697,6 +700,7 @@ def _eval_for(form, env, session):
     loop_env.define(name, None)
     current = start
     while (step > 0 and current <= end) or (step < 0 and current >= end):
+        _consume_loop_iteration(session, "for")
         loop_env.set(name, current)
         _eval_sequence(form.items[4:], loop_env, session)
         current += step
@@ -775,9 +779,26 @@ def _eval_mprocedure(form, env):
 def _eval_errset(form, env, session):
     try:
         result = _eval_sequence(form.items[1:], env, session)
-    except (SkillError, OSError):
+    except Exception:
         return None
     return [result]
+
+
+def _raise_runtime_error(name, exc):
+    raise SkillEvalError("%s failed: %s" % (name, exc))
+
+
+def _format_text(name, fmt, values):
+    try:
+        return fmt % tuple(values)
+    except (TypeError, ValueError) as exc:
+        _raise_runtime_error(name, exc)
+
+
+def _consume_loop_iteration(session, name):
+    session.loop_iterations += 1
+    if session.loop_iterations > session.max_loop_iterations:
+        raise SkillEvalError("%s exceeded the maximum iteration limit (%s)" % (name, session.max_loop_iterations))
 
 
 def _evaluate_call_arg(form, env, session):
@@ -989,6 +1010,7 @@ def evaluate(form, env, session):
         if head.name == "while":
             result = None
             while is_truthy(evaluate(form.items[1], env, session)):
+                _consume_loop_iteration(session, "while")
                 result = _eval_sequence(form.items[2:], env, session)
             return result
         if head.name == "and":
@@ -1026,7 +1048,7 @@ def evaluate(form, env, session):
                 raise SkillEvalError("sprintf requires a format string", form=form)
             fmt = evaluate(form.items[start_index], env, session)
             values = tuple(_evaluate_call_arg(arg, env, session) for arg in form.items[start_index + 1 :])
-            text = fmt % values if values else fmt
+            text = _format_text("sprintf", fmt, values)
             if target_name is not None:
                 env.set(target_name, text)
             return text
@@ -1072,41 +1094,56 @@ def _require_args(name, args, minimum=None, exact=None):
 
 
 def _builtin_plus(session, *args):
-    return sum(args) if args else 0
+    try:
+        return sum(args) if args else 0
+    except TypeError as exc:
+        _raise_runtime_error("+", exc)
 
 
 def _builtin_minus(session, *args):
     _require_args("-", args, minimum=1)
-    if len(args) == 1:
-        return -args[0]
-    result = args[0]
-    for value in args[1:]:
-        result -= value
-    return result
+    try:
+        if len(args) == 1:
+            return -args[0]
+        result = args[0]
+        for value in args[1:]:
+            result -= value
+        return result
+    except TypeError as exc:
+        _raise_runtime_error("-", exc)
 
 
 def _builtin_multiply(session, *args):
-    result = 1
-    for value in args:
-        result *= value
-    return result
+    try:
+        result = 1
+        for value in args:
+            result *= value
+        return result
+    except TypeError as exc:
+        _raise_runtime_error("*", exc)
 
 
 def _builtin_divide(session, *args):
     _require_args("/", args, minimum=1)
     integer_mode = all(isinstance(value, int) and not isinstance(value, bool) for value in args)
-    if len(args) == 1:
-        result = 1 / args[0]
-        return int(result) if integer_mode else result
-    result = args[0]
-    for value in args[1:]:
-        result = int(result / value) if integer_mode else (result / value)
-    return result
+    try:
+        if len(args) == 1:
+            result = 1 / args[0]
+            return int(result) if integer_mode else result
+        result = args[0]
+        for value in args[1:]:
+            result = int(result / value) if integer_mode else (result / value)
+        return result
+    except (TypeError, ZeroDivisionError) as exc:
+        _raise_runtime_error("/", exc)
 
 
 def _builtin_mod(session, *args):
     _require_args("mod", args, exact=2)
-    return args[0] % args[1]
+    try:
+        return args[0] % args[1]
+    except (TypeError, ZeroDivisionError) as exc:
+        _raise_runtime_error("mod", exc)
 
 
 def _builtin_list(session, *args):
@@ -1179,6 +1216,10 @@ def _builtin_nth(session, *args):
     index, values = args
     if not isinstance(values, list):
         raise SkillEvalError("nth expects a list")
+    if not isinstance(index, int):
+        raise SkillEvalError("nth expects an integer index")
+    if index < 0 or index >= len(values):
+        return None
     return values[index]
 
 
@@ -1353,6 +1394,10 @@ def _builtin_nthelem(session, *args):
     _require_args("nthelem", args, exact=2)
     index, values = args
     values = _ensure_list_value(values, "nthelem")
+    if not isinstance(index, int):
+        raise SkillEvalError("nthelem expects an integer index")
+    if index < 1 or index > len(values):
+        return None
     return values[index - 1]
 
 
@@ -1774,7 +1819,7 @@ def _builtin_printf(session, *args):
     _require_args("printf", args, minimum=1)
     fmt = args[0]
     values = tuple(args[1:])
-    text = fmt % values if values else fmt
+    text = _format_text("printf", fmt, values)
     session.output.append(text)
     return True
 
@@ -1783,7 +1828,7 @@ def _builtin_sprintf(session, *args):
     _require_args("sprintf", args, minimum=1)
     fmt = args[0]
     values = tuple(args[1:])
-    return fmt % values if values else fmt
+    return _format_text("sprintf", fmt, values)
 
 
 def _builtin_strcat(session, *args):
@@ -2006,12 +2051,18 @@ def _builtin_remainder(session, *args):
 
 def _builtin_leftshift(session, *args):
     _require_args("leftshift", args, exact=2)
-    return args[0] << args[1]
+    try:
+        return args[0] << args[1]
+    except TypeError as exc:
+        _raise_runtime_error("leftshift", exc)
 
 
 def _builtin_rightshift(session, *args):
     _require_args("rightshift", args, exact=2)
-    return args[0] >> args[1]
+    try:
+        return args[0] >> args[1]
+    except TypeError as exc:
+        _raise_runtime_error("rightshift", exc)
 
 
 def _builtin_exp(session, *args):
@@ -2082,13 +2133,23 @@ def _builtin_array(session, *args):
 def _builtin_arrayref(session, *args):
     _require_args("arrayref", args, exact=2)
     values, index = args
-    return _ensure_array_value(values, "arrayref")[index]
+    array = _ensure_array_value(values, "arrayref")
+    if not isinstance(index, int):
+        raise SkillEvalError("arrayref expects an integer index")
+    if index < 0 or index >= len(array):
+        raise SkillEvalError("arrayref index out of range")
+    return array[index]
 
 
 def _builtin_setarray(session, *args):
     _require_args("setarray", args, exact=3)
     values, index, value = args
-    _ensure_array_value(values, "setarray")[index] = value
+    array = _ensure_array_value(values, "setarray")
+    if not isinstance(index, int):
+        raise SkillEvalError("setarray expects an integer index")
+    if index < 0 or index >= len(array):
+        raise SkillEvalError("setarray index out of range")
+    array[index] = value
     return value
 
 
@@ -2223,7 +2284,7 @@ def _builtin_fprintf(session, *args):
     port = _require_open_port(args[0], "fprintf")
     fmt = args[1]
     values = tuple(args[2:])
-    text = fmt % values if values else fmt
+    text = _format_text("fprintf", fmt, values)
     port.handle.write(text)
     return True
 
@@ -2344,7 +2405,10 @@ def _builtin_get_dir_files(session, *args):
 
 def _builtin_delete_file(session, *args):
     _require_args("deleteFile", args, exact=1)
-    os.remove(session.resolve_existing_path(args[0]))
+    try:
+        os.remove(session.resolve_existing_path(args[0]))
+    except FileNotFoundError:
+        return None
     return True
 
 
@@ -2378,7 +2442,7 @@ def _builtin_errsetstring(session, *args):
     _require_args("errsetstring", args, exact=1)
     try:
         return [session.eval_text(args[0], filename="<errsetstring>")]
-    except (SkillError, OSError):
+    except Exception:
         return None
 
 

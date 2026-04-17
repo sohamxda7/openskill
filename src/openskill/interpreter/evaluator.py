@@ -775,7 +775,7 @@ def _eval_mprocedure(form, env):
 def _eval_errset(form, env, session):
     try:
         result = _eval_sequence(form.items[1:], env, session)
-    except SkillError:
+    except (SkillError, OSError):
         return None
     return [result]
 
@@ -2231,7 +2231,7 @@ def _builtin_fprintf(session, *args):
 def _builtin_fscanf(session, *args):
     _require_args("fscanf", args, minimum=2)
     port = _require_open_port(args[0], "fscanf")
-    count = len(args) - 1
+    count = _count_fscanf_fields(args[1:])
     position = port.handle.tell()
     result = []
     for _ in range(count):
@@ -2257,6 +2257,23 @@ def _read_fscanf_token(handle):
             break
         token.append(char)
     return "".join(token)
+
+
+def _count_fscanf_fields(formats):
+    count = 0
+    for item in formats:
+        text = str(item)
+        index = 0
+        while index < len(text):
+            if text[index] != "%":
+                index += 1
+                continue
+            if index + 1 < len(text) and text[index + 1] == "%":
+                index += 2
+                continue
+            count += 1
+            index += 1
+    return count or len(formats)
 
 
 def _builtin_eof(session, *args):
@@ -2361,7 +2378,7 @@ def _builtin_errsetstring(session, *args):
     _require_args("errsetstring", args, exact=1)
     try:
         return [session.eval_text(args[0], filename="<errsetstring>")]
-    except SkillError:
+    except (SkillError, OSError):
         return None
 
 

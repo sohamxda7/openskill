@@ -355,6 +355,8 @@ class EvaluatorTests(unittest.TestCase):
     def test_errset_warn_and_higher_order_helpers(self):
         session = SkillSession()
         self.assertIsNone(session.eval_text('(errset (error "boom"))'))
+        self.assertIsNone(session.eval_text('(errset (load "missing.il"))'))
+        self.assertIsNone(session.eval_text('(errset (deleteFile "missing.txt"))'))
         self.assertTrue(session.eval_text('(warn "careful")'))
         self.assertIn("Warning: careful", session.output[-1])
         self.assertEqual(session.eval_text("(getWarn)"), "careful")
@@ -568,6 +570,10 @@ class EvaluatorTests(unittest.TestCase):
             '("10" "20" "30")',
         )
         self.assertEqual(
+            format_value(session.eval_text('(let ((p (instring "10 20 30"))) (fscanf p "%d %d"))')),
+            '("10" "20")',
+        )
+        self.assertEqual(
             format_value(session.eval_text('(let ((p (instring "10 20 30"))) (list (fscanf p "%d" "%d") (getc p) (eof p)))')),
             '(("10" "20") 3 nil)',
         )
@@ -599,6 +605,7 @@ class EvaluatorTests(unittest.TestCase):
         self.assertTrue(session.eval_text("(dtpr '(1 2))"))
         self.assertTrue(session.eval_text("(typep 4 'integer)"))
         self.assertTrue(session.eval_text("(errsetstring \"(+ 1 2 3)\")"))
+        self.assertIsNone(session.eval_text('(errsetstring "(load \\"missing.il\\")")'))
         with tempfile.TemporaryDirectory() as temp_dir:
             subdir = os.path.join(temp_dir, "child")
             filepath = os.path.join(subdir, "a.txt")

@@ -1,12 +1,12 @@
-# OpenSKILL - Standalone SKILL Interpreter, REPL, IDE, and Offline API Finder for EDA
+# OpenSKILL - Run, Learn, and Explore SKILL Without Cadence Installed
 
-OpenSKILL lets you write SKILL code, run it, and look up commands on your own computer without needing Cadence installed.
+OpenSKILL is an easy way to run SKILL locally, learn SKILL programming, and explore an offline SKILL reference on your own computer without Cadence installed.
 
-It is a **standalone SKILL interpreter, REPL, desktop shell, and offline API finder** for EDA engineers, custom IC teams, students, and learners who want a practical Cadence-free SKILL workbench on Linux or Windows.
+It gives EDA engineers, custom IC teams, chip design learners, and student-friendly lab environments a practical **Cadence-free** setup for **EDA scripting**: a standalone SKILL interpreter, REPL, desktop shell, and **SKILL IDE** for Linux or Windows. The interpreter logic and bundled reference content are original work created for this project.
 
-If you are searching for a **SKILL interpreter**, **SKILL REPL**, **offline SKILL reference**, or a **Cadence-free SKILL learning environment**, this repository is built for that use case.
+If you are searching for a **SKILL interpreter**, **SKILL REPL**, **offline SKILL reference**, or a **Cadence-free** way to **learn SKILL** for **custom IC** and broader EDA workflows, this repository is built for that use case.
 
-## Start here
+## New users start here
 
 - **User manual:** [`docs/user-manual.md`](docs/user-manual.md)
 - **Command reference:** [`docs/command-reference.md`](docs/command-reference.md)
@@ -22,7 +22,7 @@ If you are searching for a **SKILL interpreter**, **SKILL REPL**, **offline SKIL
    - **Windows CLI:** `openskill-<version>-windows.exe`
    - **Linux IDE:** `./openskill-ide-<version>-linux`
    - **Windows IDE:** `openskill-ide-<version>-windows.exe`
-3. Start typing SKILL code.
+3. Start typing SKILL code and exploring the offline reference.
 
 ### From source
 
@@ -55,9 +55,9 @@ PYTHONPATH=src python3 -m openskill.ui.app
 
 - Run core SKILL scripts locally without a Cadence license checkout
 - Learn SKILL syntax, control flow, list processing, macros, and file I/O in one place
-- Search an offline API catalog while you code
+- Search an offline SKILL reference while you code
 - Download single-file CLI and IDE binaries from GitHub Releases
-- Use it as a teaching, experimentation, and scripting workbench for custom IC and EDA workflows
+- Use it as a teaching, experimentation, and scripting workbench for custom IC, chip design, and EDA workflows
 
 ## Releases
 
@@ -115,7 +115,7 @@ Use the manual for setup, workflow, language basics, and beginner examples, and 
 
 ## Documentation provenance
 
-The shipped help text, signatures, and examples in this repository were written independently for this project. The reference PDFs were used to study language behavior and surface area, but the bundled catalog content is original to this repository.
+The shipped help text, signatures, and examples in this repository were written independently for this project. Publicly available reference material was used to study externally visible behavior and language surface area, but the bundled catalog content is original to this repository.
 
 ## License
 
@@ -124,8 +124,9 @@ This project is distributed under **GPL-3.0-or-later**. See `LICENSE` for the fu
 ## Legal notice
 
 - This project is an independent educational implementation and is **not affiliated with, endorsed by, or sponsored by Cadence Design Systems, Inc.**
-- Names such as **SKILL**, **Cadence**, and **Virtuoso** are used only to describe compatibility goals and remain the property of their respective owners.
-- This repository follows a clean-room process for shipped documentation and examples, but it **does not claim immunity from copyright, trademark, contract, DMCA, or other legal challenges**.
+- This repository does **not** contain, bundle, or redistribute proprietary Cadence source code, binaries, documentation, or data files.
+- Names such as **SKILL**, **Cadence**, and **Virtuoso** are used only to describe compatibility goals and remain the property of their respective owners; such use does **not** imply certification, approval, or endorsement.
+- This repository uses independently written documentation and examples, but it **does not claim immunity from copyright, trademark, contract, DMCA, or other legal challenges**.
 - Contributors and users are responsible for ensuring that any source materials or scripts they contribute may be used lawfully.
 
 ## Development

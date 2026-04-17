@@ -93,4 +93,7 @@ def main(argv=None):
         _emit_result(session, value)
         return 0
     return _run_repl(session)
-    
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -9,6 +9,7 @@ HELP_TEXT = """Commands:
   :help              Show this message
   :quit              Exit the REPL
   :api QUERY         Search the offline API index
+  :reset             Reset the session
 
 The REPL supports core expression evaluation plus local API search.
 """

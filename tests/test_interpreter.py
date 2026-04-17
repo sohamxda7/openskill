@@ -19,6 +19,33 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(forms[0].line, 1)
         self.assertEqual(forms[0].column, 1)
 
+    def test_parses_immediate_paren_calls(self):
+        forms = parse('println("hello") plus(1 2) g()', filename="sample.il")
+        self.assertEqual(forms[0].items[0].name, "println")
+        self.assertEqual(forms[0].items[1].value, "hello")
+        self.assertEqual(forms[1].items[0].name, "plus")
+        self.assertEqual([item.value for item in forms[1].items[1:]], [1, 2])
+        self.assertEqual(forms[2].items[0].name, "g")
+        self.assertEqual(len(forms[2].items), 1)
+
+    def test_immediate_paren_calls_require_adjacency(self):
+        forms = parse('println ("hello")', filename="sample.il")
+        self.assertEqual(forms[0].name, "println")
+        self.assertEqual(forms[1].items[0].value, "hello")
+
+    def test_parses_nested_immediate_paren_special_forms(self):
+        forms = parse("procedure(foo(a @optional (b 2)) let(((x 1)) plus(a b x)))", filename="sample.il")
+        self.assertEqual(forms[0].items[0].name, "procedure")
+        signature = forms[0].items[1]
+        self.assertEqual(signature.items[0].name, "foo")
+        self.assertEqual(signature.items[1].name, "a")
+        self.assertEqual(signature.items[2].name, "@optional")
+        self.assertEqual(signature.items[3].items[0].name, "b")
+        body = forms[0].items[2]
+        self.assertEqual(body.items[0].name, "let")
+        self.assertEqual(body.items[1].items[0].items[0].name, "x")
+        self.assertEqual(body.items[2].items[0].name, "plus")
+
     def test_reports_unterminated_list(self):
         with self.assertRaises(SkillSyntaxError) as ctx:
             parse("(list 1 2", filename="broken.il")
@@ -88,6 +115,34 @@ class EvaluatorTests(unittest.TestCase):
         result = session.eval_text('(progn (println "hello") (printf "n=%d" 3))')
         self.assertTrue(result)
         self.assertEqual(session.output, ['"hello"', 'n=3'])
+
+    def test_classic_immediate_paren_calls(self):
+        session = SkillSession()
+        value = session.eval_text(
+            """
+            procedure(sumPair(a b @optional (c 10) @rest rest)
+              list(plus(a b c) rest))
+            list(
+              plus(1 2)
+              sumPair(3 4)
+              sumPair(3 4 5 6 7)
+              let(((x 1) (y 2)) plus(x y)))
+            """
+        )
+        self.assertEqual(format_value(value), "(3 (17 nil) (12 (6 7)) 3)")
+        self.assertEqual(session.output, [])
+
+    def test_classic_immediate_paren_print_and_nested_calls(self):
+        session = SkillSession()
+        value = session.eval_text(
+            """
+            procedure(ping() 42)
+            println("hello world")
+            plus(ping() plus(1 2))
+            """
+        )
+        self.assertEqual(value, 45)
+        self.assertEqual(session.output, ['"hello world"'])
 
     def test_cond_and_defun(self):
         session = SkillSession()

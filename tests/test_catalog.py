@@ -267,12 +267,7 @@ class CatalogTests(unittest.TestCase):
             with self.subTest(symbol=entry["symbol"]):
                 with tempfile.TemporaryDirectory() as temp_dir:
                     session = SkillSession(cwd=temp_dir)
-                    previous_cwd = os.getcwd()
-                    try:
-                        os.chdir(temp_dir)
-                        session.eval_text(entry["example"], filename="<catalog-example>")
-                    finally:
-                        os.chdir(previous_cwd)
+                    session.eval_text(entry["example"], filename="<catalog-example>")
 
     def test_catalog_symbols_resolve_to_special_forms_or_runtime_bindings(self):
         runtime_symbols = set(create_global_env().values.keys())

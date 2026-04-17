@@ -563,6 +563,14 @@ class EvaluatorTests(unittest.TestCase):
         self.assertEqual(value[1], "row2\n")
         self.assertIsNone(value[2])
         self.assertTrue(value[3])
+        self.assertEqual(
+            format_value(session.eval_text('(let ((p (instring "10 20 30"))) (list (fscanf p "%d") (fscanf p "%d") (fscanf p "%d")) )')),
+            '("10" "20" "30")',
+        )
+        self.assertEqual(
+            format_value(session.eval_text('(let ((p (instring "10 20 30"))) (list (fscanf p "%d" "%d") (getc p) (eof p)))')),
+            '(("10" "20") 3 nil)',
+        )
         with tempfile.TemporaryDirectory() as temp_dir:
             path = os.path.join(temp_dir, "sample.txt")
             program = """
@@ -627,6 +635,35 @@ class EvaluatorTests(unittest.TestCase):
             self.assertEqual(value[5], [temp_dir])
             self.assertTrue(session.eval_text('(deleteFile "%s")' % filepath.replace("\\", "\\\\")))
             self.assertIsNone(session.eval_text('(isFile "%s")' % filepath.replace("\\", "\\\\")))
+        with tempfile.TemporaryDirectory() as temp_dir:
+            examples_dir = os.path.join(temp_dir, "examples")
+            os.makedirs(examples_dir)
+            hello_path = os.path.join(examples_dir, "hello.il")
+            nested_path = os.path.join(examples_dir, "nested.il")
+            with open(hello_path, "w") as handle:
+                handle.write('(procedure (hello name) (println (strcat "Hello, " name "!")))\n(hello "OpenSKILL")\n')
+            with open(nested_path, "w") as handle:
+                handle.write('(load "hello.il")\n')
+            session = SkillSession(cwd=temp_dir)
+            self.assertEqual(
+                session.eval_text('(progn (changeWorkingDir "examples") (list (getWorkingDir) (isFile "hello.il")) )'),
+                [examples_dir, True],
+            )
+            value = session.eval_text('(load "hello.il")')
+            self.assertTrue(value)
+            self.assertIn('Hello, OpenSKILL!', session.output[-1])
+            session = SkillSession(cwd=temp_dir)
+            session.eval_text('(setSkillPath (list "examples"))')
+            value = session.eval_text('(load "hello.il")')
+            self.assertTrue(value)
+            self.assertIn('Hello, OpenSKILL!', session.output[-1])
+            session = SkillSession(cwd=temp_dir)
+            value = session.eval_text('(load "examples/nested.il")')
+            self.assertTrue(value)
+            self.assertIn('Hello, OpenSKILL!', session.output[-1])
+            with self.assertRaises(SkillEvalError) as ctx:
+                session.eval_text('(changeWorkingDir "missing-dir")')
+            self.assertIn("existing directory", str(ctx.exception))
 
     def test_skillpp_class_definition_and_defaults(self):
         session = SkillSession()
@@ -699,7 +736,7 @@ class EvaluatorTests(unittest.TestCase):
         )
         self.assertEqual(value[0], ["10", "20"])
         self.assertTrue(isinstance(value[1], int))
-        self.assertTrue(value[2])
+        self.assertIsNone(value[2])
         self.assertEqual(value[3], 0)
         self.assertTrue(value[4])
         self.assertTrue(value[5])

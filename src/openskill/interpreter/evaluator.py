@@ -2156,12 +2156,12 @@ def _builtin_remove_table_entry(session, *args):
 
 def _builtin_infile(session, *args):
     _require_args("infile", args, exact=1)
-    return SkillPort(open(args[0], "r"), "input")
+    return SkillPort(open(session.resolve_existing_path(args[0]), "r"), "input")
 
 
 def _builtin_outfile(session, *args):
     _require_args("outfile", args, exact=1)
-    return SkillPort(open(args[0], "w"), "output")
+    return SkillPort(open(session.resolve_path(args[0]), "w"), "output")
 
 
 def _builtin_instring(session, *args):
@@ -2232,11 +2232,31 @@ def _builtin_fscanf(session, *args):
     _require_args("fscanf", args, minimum=2)
     port = _require_open_port(args[0], "fscanf")
     count = len(args) - 1
-    data = port.handle.read().split()
-    if len(data) < count:
-        return None
-    result = data[:count]
+    position = port.handle.tell()
+    result = []
+    for _ in range(count):
+        token = _read_fscanf_token(port.handle)
+        if token is None:
+            port.handle.seek(position)
+            return None
+        result.append(token)
     return result if len(result) > 1 else result[0]
+
+
+def _read_fscanf_token(handle):
+    while True:
+        char = handle.read(1)
+        if char == "":
+            return None
+        if not char.isspace():
+            break
+    token = [char]
+    while True:
+        char = handle.read(1)
+        if char == "" or char.isspace():
+            break
+        token.append(char)
+    return "".join(token)
 
 
 def _builtin_eof(session, *args):
@@ -2281,12 +2301,12 @@ def _builtin_file_seek(session, *args):
 
 def _builtin_is_file(session, *args):
     _require_args("isFile", args, exact=1)
-    return True if os.path.isfile(args[0]) else None
+    return True if os.path.isfile(session.resolve_path(args[0])) else None
 
 
 def _builtin_is_dir(session, *args):
     _require_args("isDir", args, exact=1)
-    return True if os.path.isdir(args[0]) else None
+    return True if os.path.isdir(session.resolve_path(args[0])) else None
 
 
 def _builtin_is_file_name(session, *args):
@@ -2296,18 +2316,18 @@ def _builtin_is_file_name(session, *args):
 
 def _builtin_create_dir(session, *args):
     _require_args("createDir", args, exact=1)
-    os.makedirs(args[0], exist_ok=True)
+    os.makedirs(session.resolve_path(args[0]), exist_ok=True)
     return True
 
 
 def _builtin_get_dir_files(session, *args):
     _require_args("getDirFiles", args, exact=1)
-    return sorted(os.listdir(args[0]))
+    return sorted(os.listdir(session.resolve_existing_path(args[0])))
 
 
 def _builtin_delete_file(session, *args):
     _require_args("deleteFile", args, exact=1)
-    os.remove(args[0])
+    os.remove(session.resolve_existing_path(args[0]))
     return True
 
 
@@ -2318,7 +2338,10 @@ def _builtin_get_working_dir(session, *args):
 
 def _builtin_change_working_dir(session, *args):
     _require_args("changeWorkingDir", args, exact=1)
-    session.cwd = os.path.abspath(args[0])
+    resolved = session.resolve_path(args[0])
+    if not os.path.isdir(resolved):
+        raise SkillEvalError("changeWorkingDir expects an existing directory")
+    session.cwd = resolved
     return session.cwd
 
 
@@ -2330,7 +2353,7 @@ def _builtin_get_skill_path(session, *args):
 def _builtin_set_skill_path(session, *args):
     _require_args("setSkillPath", args, exact=1)
     values = _ensure_list_value(args[0], "setSkillPath")
-    session.skill_path = [str(value) for value in values]
+    session.skill_path = [session.resolve_path(value) for value in values]
     return list(session.skill_path)
 
 

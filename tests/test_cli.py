@@ -1,3 +1,4 @@
+import contextlib
 import io
 import os
 import sys
@@ -27,6 +28,15 @@ class CliTests(unittest.TestCase):
     def test_api_find_command(self):
         code = main(["api", "find", "when"])
         self.assertEqual(code, 0)
+
+    def test_expr_errors_return_nonzero_without_traceback(self):
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            code = main(["--expr", '(load "missing.il")'])
+        self.assertEqual(code, 1)
+        rendered = stderr.getvalue()
+        self.assertIn("missing.il", rendered)
+        self.assertNotIn("Traceback", rendered)
 
 
 class ReplTests(unittest.TestCase):

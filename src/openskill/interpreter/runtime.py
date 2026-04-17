@@ -1,3 +1,4 @@
+import errno
 import os
 import random
 
@@ -11,7 +12,7 @@ class SkillSession(object):
         self.global_env = create_global_env()
         self.output = []
         self.current_env = self.global_env
-        self._load_stack = [self.cwd]
+        self._load_stack = []
         self.symbol_plists = {}
         self.class_registry = {}
         self.gensym_counter = 0
@@ -26,12 +27,39 @@ class SkillSession(object):
             result = evaluate(form, self.global_env, self)
         return result
 
+    def resolve_path(self, path, base_dir=None):
+        raw = str(path)
+        if os.path.isabs(raw):
+            return os.path.abspath(raw)
+        return os.path.abspath(os.path.join(base_dir or self.cwd, raw))
+
+    def resolve_existing_path(self, path, search_skill_path=False):
+        raw = str(path)
+        if os.path.isabs(raw):
+            resolved = os.path.abspath(raw)
+            if os.path.exists(resolved):
+                return resolved
+            raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), resolved)
+
+        candidates = []
+        if self._load_stack:
+            candidates.append(self._load_stack[-1])
+        candidates.append(self.cwd)
+        if search_skill_path:
+            candidates.extend(self.skill_path)
+
+        seen = set()
+        for base_dir in candidates:
+            resolved = self.resolve_path(raw, base_dir=base_dir)
+            if resolved in seen:
+                continue
+            seen.add(resolved)
+            if os.path.exists(resolved):
+                return resolved
+        raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), self.resolve_path(raw))
+
     def load_file(self, path):
-        base_dir = self._load_stack[-1] if self._load_stack else self.cwd
-        resolved = path
-        if not os.path.isabs(resolved):
-            resolved = os.path.join(base_dir, path)
-        resolved = os.path.abspath(resolved)
+        resolved = self.resolve_existing_path(path, search_skill_path=True)
         with open(resolved, "r") as handle:
             source = handle.read()
         self._load_stack.append(os.path.dirname(resolved))

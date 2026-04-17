@@ -4,6 +4,7 @@ import sys
 
 from openskill.apifinder.index import load_index, search
 from openskill import __version__
+from openskill.interpreter.errors import SkillError
 from openskill.interpreter.runtime import SkillSession, format_value
 from openskill.runtime.repl import start_repl
 
@@ -57,6 +58,14 @@ def _api_find(argv):
     return 0
 
 
+def _run_cli_action(action):
+    try:
+        return action()
+    except (SkillError, OSError) as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
+
 def main(argv=None):
     argv = argv or sys.argv[1:]
     if argv:
@@ -85,13 +94,19 @@ def main(argv=None):
 
     session = SkillSession(cwd=os.getcwd())
     if args.expr:
-        value = session.eval_text(args.expr, filename="<expr>")
-        _emit_result(session, value)
-        return 0
+        def _eval_expr():
+            value = session.eval_text(args.expr, filename="<expr>")
+            _emit_result(session, value)
+            return 0
+
+        return _run_cli_action(_eval_expr)
     if args.script:
-        value = session.load_file(args.script)
-        _emit_result(session, value)
-        return 0
+        def _run_script():
+            value = session.load_file(args.script)
+            _emit_result(session, value)
+            return 0
+
+        return _run_cli_action(_run_script)
     return _run_repl(session)
 
 

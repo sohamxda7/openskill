@@ -111,13 +111,43 @@ def tokenize(source, filename="<string>"):
                 )
             tokens.append(Token("STRING", "".join(chars), start_line, start_col, filename))
             continue
+        if source.startswith("&&", index):
+            tokens.append(Token("SYMBOL", "&&", line, column, filename))
+            index += 2
+            column += 2
+            continue
+        if source.startswith("==", index):
+            tokens.append(Token("SYMBOL", "==", line, column, filename))
+            index += 2
+            column += 2
+            continue
+        if source.startswith("!=", index):
+            tokens.append(Token("SYMBOL", "!=", line, column, filename))
+            index += 2
+            column += 2
+            continue
+        if char == "=":
+            tokens.append(Token("SYMBOL", "=", line, column, filename))
+            index += 1
+            column += 1
+            continue
+        if char == "!":
+            tokens.append(Token("SYMBOL", "!", line, column, filename))
+            index += 1
+            column += 1
+            continue
         start = index
         start_col = column
         while index < length and source[index] not in "();'`,\" \t\r\n":
+            if source.startswith("&&", index) or source.startswith("==", index) or source.startswith("!=", index):
+                break
+            if source[index] == "!":
+                break
+            if source[index] == "=" and source[index - 1] not in "<>":
+                break
             index += 1
             column += 1
         text = source[start:index]
         tokens.append(Token("SYMBOL", text, line, start_col, filename))
     tokens.append(Token("EOF", "", line, column, filename))
     return tokens
-

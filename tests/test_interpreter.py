@@ -8,6 +8,7 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 from openskill.interpreter.errors import SkillSyntaxError
+from openskill.interpreter.lexer import tokenize
 from openskill.interpreter.parser import parse
 from openskill.interpreter.runtime import SkillSession, format_value
 
@@ -50,6 +51,29 @@ class ParserTests(unittest.TestCase):
         with self.assertRaises(SkillSyntaxError) as ctx:
             parse("(list 1 2", filename="broken.il")
         self.assertIn("broken.il:1:1", str(ctx.exception))
+
+    def test_lexes_bang_as_operator_before_symbols(self):
+        tokens = tokenize("!variable !=", filename="sample.il")
+        self.assertEqual([token.text for token in tokens[:-1]], ["!", "variable", "!="])
+
+    def test_rewrites_operator_compat_expressions(self):
+        forms = parse("tot = plus(a b) when(!flag && a == b ok)", filename="sample.il")
+        assignment = forms[0]
+        self.assertEqual(assignment.items[0].name, "setq")
+        self.assertEqual(assignment.items[1].name, "tot")
+        self.assertEqual(assignment.items[2].items[0].name, "plus")
+
+        when_form = forms[1]
+        self.assertEqual(when_form.items[0].name, "when")
+        condition = when_form.items[1]
+        self.assertEqual(condition.items[0].name, "and")
+        self.assertEqual(condition.items[1].items[0].name, "not")
+        self.assertEqual(condition.items[2].items[0].name, "equal")
+
+    def test_preserves_prefix_equals_calls(self):
+        forms = parse("(= 3 3)", filename="sample.il")
+        self.assertEqual(forms[0].items[0].name, "=")
+        self.assertEqual([item.value for item in forms[0].items[1:]], [3, 3])
 
 
 class EvaluatorTests(unittest.TestCase):
@@ -165,6 +189,22 @@ class EvaluatorTests(unittest.TestCase):
         self.assertEqual(session.eval_text("(funcall + 1 2 3 4)"), 10)
         self.assertEqual(session.eval_text("(progn (setq ?x 5) (+ ?x 1))"), 6)
         self.assertEqual(format_value(session.eval_text("(progn (setq ?x 5) (list ?x))")), "(5)")
+
+    def test_operator_compatibility(self):
+        session = SkillSession()
+        value = session.eval_text(
+            """
+            tot = plus(1 2)
+            flag = nil
+            same = tot == 3
+            diff = tot != 4
+            both = same && diff
+            when(flag println("skip"))
+            when(!flag tot = plus(tot 4))
+            list(tot same diff both !flag (= 3 3))
+            """
+        )
+        self.assertEqual(format_value(value), "(7 t t t t t)")
 
     def test_string_and_numeric_helpers(self):
         session = SkillSession()

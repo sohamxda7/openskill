@@ -9,6 +9,13 @@ FLOAT_RE = re.compile(r"^[+-]?(?:[0-9]+\.[0-9]*|\.[0-9]+)$")
 
 
 class Parser(object):
+    INFIX_PRECEDENCE = {
+        "=": 10,
+        "&&": 20,
+        "==": 30,
+        "!=": 30,
+    }
+
     def __init__(self, tokens):
         self.tokens = tokens
         self.index = 0
@@ -24,10 +31,34 @@ class Parser(object):
     def parse_forms(self):
         forms = []
         while self.peek().kind != "EOF":
-            forms.append(self.parse_form())
+            forms.append(self.parse_expression())
         return forms
 
     def parse_form(self):
+        return self.parse_expression()
+
+    def parse_expression(self, minimum_precedence=0):
+        left = self.parse_prefix()
+        while True:
+            operator = self._peek_infix_operator()
+            if operator is None:
+                return left
+            precedence = self.INFIX_PRECEDENCE[operator.text]
+            if precedence < minimum_precedence:
+                return left
+            self.consume()
+            right = self.parse_expression(precedence if operator.text == "=" else precedence + 1)
+            left = self._rewrite_infix(operator, left, right)
+
+    def parse_prefix(self):
+        token = self.peek()
+        if token.kind == "SYMBOL" and token.text == "!":
+            operator = self.consume()
+            value = self.parse_expression(40)
+            return self._rewrite_prefix(operator, value)
+        return self.parse_primary()
+
+    def parse_primary(self):
         token = self.peek()
         if token.kind == "LPAREN":
             return self.parse_list()
@@ -71,7 +102,7 @@ class Parser(object):
                     line=start.line,
                     column=start.column,
                 )
-            items.append(self.parse_form())
+            items.append(self.parse_expression())
         self.consume()
         return items
 
@@ -107,6 +138,40 @@ class Parser(object):
         items = [operator]
         items.extend(self._parse_list_items(start))
         return ListForm(items, token.line, token.column, token.filename)
+
+    def _peek_infix_operator(self):
+        token = self.peek()
+        if token.kind != "SYMBOL":
+            return None
+        if token.text not in self.INFIX_PRECEDENCE:
+            return None
+        return token
+
+    def _rewrite_prefix(self, operator, value):
+        symbol = SymbolForm("not", operator.line, operator.column, operator.filename)
+        return ListForm([symbol, value], operator.line, operator.column, operator.filename)
+
+    def _rewrite_infix(self, operator, left, right):
+        if operator.text == "=":
+            if not isinstance(left, SymbolForm):
+                raise SkillSyntaxError(
+                    "assignment target must be a symbol",
+                    filename=operator.filename,
+                    line=operator.line,
+                    column=operator.column,
+                )
+            symbol_name = "setq"
+        else:
+            symbol_name = {
+                "==": "equal",
+                "!=": "nequal",
+                "&&": "and",
+            }[operator.text]
+        symbol = SymbolForm(symbol_name, operator.line, operator.column, operator.filename)
+        if symbol_name == "and" and isinstance(left, ListForm) and left.items and isinstance(left.items[0], SymbolForm):
+            if left.items[0].name == "and":
+                return ListForm(left.items + [right], left.line, left.column, left.filename)
+        return ListForm([symbol, left, right], operator.line, operator.column, operator.filename)
 
 
 def parse(source, filename="<string>"):

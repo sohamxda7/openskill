@@ -6,7 +6,9 @@ from openskill.ide.editor_support import (
     BRACKET_PALETTE,
     analyze_brackets,
     completion_candidates,
+    should_show_completion_popup,
     symbol_fragment_bounds,
+    syntax_highlight_ranges,
 )
 from openskill.interpreter.runtime import SkillSession, format_value
 
@@ -75,7 +77,7 @@ class OpenSkillWindow(object):
 
         self.editor = tk.Text(editor_frame, wrap="none", width=80, undo=True)
         self.editor.grid(row=0, column=1, sticky="nsew")
-        self.editor.bind("<KeyRelease>", self._on_editor_changed)
+        self.editor.bind("<KeyRelease>", self._on_editor_key_release)
         self.editor.bind("<ButtonRelease-1>", self._on_editor_changed)
         self.editor.bind("<Configure>", self._on_editor_changed)
         self.editor.bind("<Tab>", self._on_editor_tab)
@@ -165,36 +167,10 @@ class OpenSkillWindow(object):
         self.line_numbers.yview_moveto(self.editor.yview()[0])
 
     def _highlight_keywords(self):
-        keywords = [
-            "procedure",
-            "lambda",
-            "setq",
-            "let",
-            "if",
-            "when",
-            "unless",
-            "case",
-            "for",
-            "foreach",
-            "while",
-            "progn",
-            "quote",
-            "load",
-            "defun",
-            "defmacro",
-            "defclass",
-            "makeInstance",
-        ]
         self.editor.tag_remove("keyword", "1.0", tk.END)
-        for keyword in keywords:
-            start = "1.0"
-            while True:
-                match = self.editor.search(r"\m{0}\M".format(keyword), start, stopindex=tk.END, regexp=True)
-                if not match:
-                    break
-                end = "{0}+{1}c".format(match, len(keyword))
-                self.editor.tag_add("keyword", match, end)
-                start = end
+        text = self._editor_text()
+        for start, end, _ in syntax_highlight_ranges(text, self.catalog_symbols, text):
+            self.editor.tag_add("keyword", start, end)
 
     def _highlight_brackets(self):
         text = self._editor_text()
@@ -283,6 +259,24 @@ class OpenSkillWindow(object):
         self._completion_range = (start, end)
         self._show_completion_popup(matches)
 
+    def _auto_completion_context(self):
+        context = self._current_completion_context()
+        if context is None:
+            return None
+        start, end, fragment, matches = context
+        if not should_show_completion_popup(fragment, matches):
+            return None
+        return start, end, fragment, matches
+
+    def _maybe_show_completion_popup(self):
+        context = self._auto_completion_context()
+        if context is None:
+            self._hide_completion_popup()
+            return
+        start, end, _, matches = context
+        self._completion_range = (start, end)
+        self._show_completion_popup(matches)
+
     def _insert_completion(self, replacement):
         start, end = self._completion_range
         self.editor.delete(self._offset_to_index(start), self._offset_to_index(end))
@@ -362,6 +356,20 @@ class OpenSkillWindow(object):
     def _on_editor_changed(self, event=None):
         del event
         self._refresh_editor_decorations()
+        self._refresh_completion_popup()
+
+    def _on_editor_key_release(self, event=None):
+        self._refresh_editor_decorations()
+        if event is None:
+            return
+        if event.keysym in {"Up", "Down", "Left", "Right", "Return", "Escape", "Tab", "Prior", "Next", "Home", "End"}:
+            self._refresh_completion_popup()
+            return
+        if event.keysym.startswith("Shift") or event.keysym.startswith("Control") or event.keysym.startswith("Alt"):
+            return
+        if event.keysym in {"BackSpace", "Delete"} or (event.char and event.char.isprintable()):
+            self._maybe_show_completion_popup()
+            return
         self._refresh_completion_popup()
 
     def _append_console(self, message, widget=None):

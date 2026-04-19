@@ -9,10 +9,13 @@ if ROOT not in sys.path:
 from openskill.ide.editor_support import (
     analyze_brackets,
     completion_candidates,
+    editor_symbols,
     extract_user_symbols,
     line_number_text,
     matching_bracket_pair,
+    should_show_completion_popup,
     symbol_fragment_bounds,
+    syntax_highlight_ranges,
 )
 
 
@@ -38,6 +41,33 @@ class EditorSupportTests(unittest.TestCase):
         source = "(procedure (helloWorld name) name)\n(defun helperFn (x) x)"
         matches = completion_candidates("he", ["help", "when", "hello"], source, limit=10)
         self.assertEqual(matches[:4], ["hello", "helloWorld", "help", "helperFn"])
+
+    def test_editor_symbols_include_syntax_markers(self):
+        source = "(procedure (helloWorld name) name)"
+        symbols = editor_symbols(["println"], source)
+        self.assertIn("println", symbols)
+        self.assertIn("helloWorld", symbols)
+        self.assertIn("else", symbols)
+        self.assertIn("then", symbols)
+        self.assertIn("->=", symbols)
+
+    def test_syntax_highlight_ranges_cover_catalog_syntax_and_user_symbols(self):
+        source = 'if(a < 1 then println("skip") else helperFn(a))\n(procedure (helperFn value) value)'
+        ranges = syntax_highlight_ranges(source, ["if", "<", "println"], source)
+        highlighted = [token for _, _, token in ranges]
+        self.assertIn("if", highlighted)
+        self.assertIn("<", highlighted)
+        self.assertIn("then", highlighted)
+        self.assertIn("else", highlighted)
+        self.assertIn("println", highlighted)
+        self.assertIn("helperFn", highlighted)
+        self.assertNotIn("skip", highlighted)
+
+    def test_should_show_completion_popup_hides_exact_match_only(self):
+        self.assertTrue(should_show_completion_popup("pr", ["println"]))
+        self.assertTrue(should_show_completion_popup("println", ["println", "printf"]))
+        self.assertFalse(should_show_completion_popup("println", ["println"]))
+        self.assertFalse(should_show_completion_popup("", ["println"]))
 
     def test_analyze_brackets_tracks_depth_and_unmatched_tokens(self):
         depth_by_offset, match_by_offset, unmatched = analyze_brackets("(a [b {c}]")

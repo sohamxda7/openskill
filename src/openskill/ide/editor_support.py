@@ -1,5 +1,7 @@
 import re
 
+from openskill.interpreter.lexer import tokenize
+
 
 BRACKET_PALETTE = (
     "#d19a66",
@@ -15,6 +17,56 @@ _DEFINITION_PATTERNS = (
     re.compile(r"\((?:defun|defmacro|defclass)\s+([^\s()]+)"),
 )
 _SYMBOL_DELIMITERS = set("()[]{}'\"`;,\t\r\n ")
+_EDITOR_MARKERS = frozenset(
+    {
+        "quote",
+        "quasiquote",
+        "if",
+        "when",
+        "unless",
+        "progn",
+        "let",
+        "setq",
+        "lambda",
+        "procedure",
+        "case",
+        "caseq",
+        "cond",
+        "catch",
+        "throw",
+        "foreach",
+        "for",
+        "exists",
+        "forall",
+        "prog",
+        "prog1",
+        "prog2",
+        "return",
+        "defun",
+        "defclass",
+        "defmacro",
+        "nprocedure",
+        "mprocedure",
+        "errset",
+        "while",
+        "and",
+        "or",
+        "sprintf",
+        "->",
+        "->=",
+        "unquote",
+        "splice",
+        "then",
+        "else",
+        "t",
+        "nil",
+        "@optional",
+        "@key",
+        "@rest",
+        "@aux",
+        "@whole",
+    }
+)
 
 
 def extract_user_symbols(source):
@@ -22,6 +74,10 @@ def extract_user_symbols(source):
     for pattern in _DEFINITION_PATTERNS:
         symbols.update(match.group(1) for match in pattern.finditer(source))
     return sorted(symbols)
+
+
+def editor_symbols(catalog_symbols, source):
+    return sorted(set(catalog_symbols).union(_EDITOR_MARKERS).union(extract_user_symbols(source)), key=lambda item: item.lower())
 
 
 def symbol_fragment_bounds(text, cursor_offset):
@@ -40,14 +96,35 @@ def symbol_fragment_bounds(text, cursor_offset):
 
 def completion_candidates(prefix, catalog_symbols, source, limit=12):
     prefix = prefix or ""
-    user_symbols = extract_user_symbols(source)
-    combined = sorted(set(catalog_symbols).union(user_symbols), key=lambda item: item.lower())
+    combined = editor_symbols(catalog_symbols, source)
     if not prefix:
         return combined[:limit]
     lowered = prefix.lower()
     starts = [item for item in combined if item.lower().startswith(lowered)]
     contains = [item for item in combined if lowered in item.lower() and item not in starts]
     return (starts + contains)[:limit]
+
+
+def syntax_highlight_ranges(text, catalog_symbols, source):
+    highlightable = set(editor_symbols(catalog_symbols, source))
+    ranges = []
+    for token in tokenize(text):
+        if token.kind == "EOF":
+            continue
+        if token.kind not in ("SYMBOL", "OPERATOR", "ARROW"):
+            continue
+        if token.text not in highlightable:
+            continue
+        start = "%d.%d" % (token.line, token.column - 1)
+        end = "%d.%d" % (token.line, token.column - 1 + len(token.text))
+        ranges.append((start, end, token.text))
+    return ranges
+
+
+def should_show_completion_popup(fragment, matches):
+    if not fragment or not matches:
+        return False
+    return len(matches) > 1 or matches[0] != fragment
 
 
 def analyze_brackets(text):

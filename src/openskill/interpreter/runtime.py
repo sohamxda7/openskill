@@ -24,7 +24,12 @@ class SkillSession(object):
 
     def eval_text(self, source, filename="<string>"):
         self.loop_iterations = 0
-        forms = parse(source, filename=filename)
+        known_heads = {
+            name
+            for name, value in self.global_env.values.items()
+            if callable(value) or hasattr(value, "invoke") or hasattr(value, "expand")
+        }
+        forms = parse(source, filename=filename, known_heads=known_heads)
         result = None
         for form in forms:
             result = evaluate(form, self.global_env, self)

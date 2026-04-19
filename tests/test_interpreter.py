@@ -130,6 +130,15 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(condition.items[1].name, "a")
         self.assertEqual(condition.items[2].items[0].name, "plus")
 
+    def test_groups_unary_prefix_expressions(self):
+        forms = parse("(!done) (-a + b)", filename="sample.il")
+        self.assertEqual(forms[0].items[0].name, "not")
+        self.assertEqual(forms[0].items[1].name, "done")
+        self.assertEqual(forms[1].items[0].name, "plus")
+        self.assertEqual(forms[1].items[1].items[0].name, "difference")
+        self.assertEqual(forms[1].items[1].items[1].name, "a")
+        self.assertEqual(forms[1].items[2].name, "b")
+
     def test_rewrites_unary_minus(self):
         forms = parse("-a a + -b a - b - c", filename="sample.il")
         self.assertEqual(forms[0].items[0].name, "difference")
@@ -153,6 +162,18 @@ class ParserTests(unittest.TestCase):
         self.assertEqual([item.value for item in forms[0].items[1:]], [1, 2])
         self.assertEqual(forms[1].items[0].name, "-")
         self.assertEqual([item.value for item in forms[1].items[1:]], [5, 3])
+
+    def test_preserves_operator_symbols_as_call_arguments(self):
+        forms = parse(
+            "(procedure (dispatch op x y) (funcall op x y)) (dispatch + 1 2) (dispatch < 1 2) (funcall - 5 3)",
+            filename="sample.il",
+        )
+        self.assertEqual(forms[1].items[0].name, "dispatch")
+        self.assertEqual(forms[1].items[1].name, "+")
+        self.assertEqual(forms[2].items[0].name, "dispatch")
+        self.assertEqual(forms[2].items[1].name, "<")
+        self.assertEqual(forms[3].items[0].name, "funcall")
+        self.assertEqual(forms[3].items[1].name, "-")
 
     def test_rewrites_slot_access_and_assignment(self):
         forms = parse("inst->x inst->x = 3", filename="sample.il")
@@ -249,6 +270,7 @@ class EvaluatorTests(unittest.TestCase):
         self.assertEqual(format_value(session.eval_text("(reverse '(1 2 3))")), "(3 2 1)")
         self.assertEqual(format_value(session.eval_text("(append1 '(1 2) 3)")), "(1 2 3)")
         self.assertEqual(session.eval_text("(apply + 1 '(2 3 4))"), 10)
+        self.assertEqual(session.eval_text("(apply - '(5 3))"), 2)
 
     def test_print_family_writes_output_buffer(self):
         session = SkillSession()
@@ -330,6 +352,20 @@ class EvaluatorTests(unittest.TestCase):
         self.assertEqual(value, 99)
         self.assertEqual(session.output, ['"matched"'])
 
+    def test_grouped_unary_operator_syntax(self):
+        session = SkillSession()
+        value = session.eval_text(
+            """
+            done = nil
+            a = 3
+            b = 5
+            list(
+              if((!done) then 'go else 'stop)
+              (-a + b))
+            """
+        )
+        self.assertEqual(format_value(value), "(go 2)")
+
     def test_tight_operator_syntax_matches_skill_examples(self):
         session = SkillSession()
         value = session.eval_text(
@@ -377,7 +413,22 @@ class EvaluatorTests(unittest.TestCase):
         self.assertEqual(session.eval_text("count"), 5)
         self.assertEqual(session.eval_text("(eval '(+ 1 2 3))"), 6)
         self.assertEqual(session.eval_text("(funcall + 1 2 3 4)"), 10)
+        self.assertEqual(session.eval_text("(funcall - 5 3)"), 2)
         self.assertEqual(session.eval_text("(progn (setq ?x 5) (+ ?x 1))"), 6)
+
+    def test_user_defined_dispatch_accepts_operator_values(self):
+        session = SkillSession()
+        value = session.eval_text(
+            """
+            (procedure (dispatch op x y)
+              (funcall op x y))
+            (list
+              (dispatch + 1 2)
+              (dispatch - 5 3)
+              (dispatch < 1 2))
+            """
+        )
+        self.assertEqual(format_value(value), "(3 2 t)")
         self.assertEqual(format_value(session.eval_text("(progn (setq ?x 5) (list ?x))")), "(5)")
 
     def test_operator_compatibility(self):

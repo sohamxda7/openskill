@@ -7,7 +7,7 @@ from openskill.interpreter.lexer import tokenize
 
 INTEGER_RE = re.compile(r"^[+-]?[0-9]+$")
 FLOAT_RE = re.compile(r"^[+-]?(?:[0-9]+\.[0-9]*|\.[0-9]+)$")
-KNOWN_CALL_HEADS = set(create_global_env().values.keys()) | {
+BUILTIN_CALL_HEADS = set(create_global_env().values.keys()) | {
     "quote",
     "quasiquote",
     "if",
@@ -61,9 +61,12 @@ class Parser(object):
     }
     PREFIX_PRECEDENCE = 60
 
-    def __init__(self, tokens):
+    def __init__(self, tokens, known_heads=None):
         self.tokens = tokens
         self.index = 0
+        self.known_heads = set(BUILTIN_CALL_HEADS)
+        if known_heads:
+            self.known_heads.update(known_heads)
 
     def peek(self):
         return self.tokens[self.index]
@@ -76,7 +79,9 @@ class Parser(object):
     def parse_forms(self):
         forms = []
         while self.peek().kind != "EOF":
-            forms.append(self.parse_expression())
+            form = self.parse_expression()
+            self._record_defined_head(form)
+            forms.append(form)
         return forms
 
     def parse_form(self):
@@ -102,7 +107,7 @@ class Parser(object):
 
     def parse_prefix(self):
         token = self.peek()
-        if token.kind in ("SYMBOL", "OPERATOR") and token.text in ("!", "-"):
+        if token.kind in ("SYMBOL", "OPERATOR") and token.text in ("!", "-") and self._is_attached_prefix_operator(token):
             operator = self.consume()
             value = self.parse_expression(self.PREFIX_PRECEDENCE)
             return self._rewrite_prefix(operator, value)
@@ -143,24 +148,22 @@ class Parser(object):
             self.consume()
             return ListForm([], start.line, start.column, start.filename)
 
+        save_index = self.index
+        if self._starts_attached_prefix_group():
+            grouped = self.parse_expression()
+            if self.peek().kind == "RPAREN":
+                self.consume()
+                return grouped
+            self.index = save_index
+
         first = self._parse_postfix(self.parse_primary())
         if self._peek_infix_operator() is not None and not self._is_known_call_head(first):
             grouped = self._parse_expression_tail(first)
             if self.peek().kind == "RPAREN":
                 self.consume()
                 return grouped
-            items = [grouped]
-            while self.peek().kind != "RPAREN":
-                if self.peek().kind == "EOF":
-                    raise SkillSyntaxError(
-                        "unterminated list",
-                        filename=start.filename,
-                        line=start.line,
-                        column=start.column,
-                    )
-                items.append(self.parse_expression())
-            self.consume()
-            return ListForm(items, start.line, start.column, start.filename)
+            self.index = save_index
+            first = self._parse_postfix(self.parse_primary())
 
         items = [first]
         while self.peek().kind != "RPAREN":
@@ -260,6 +263,16 @@ class Parser(object):
             return None
         return token
 
+    def _is_attached_prefix_operator(self, token):
+        next_token = self.tokens[self.index + 1]
+        if next_token.kind in ("EOF", "RPAREN"):
+            return False
+        return token.line == next_token.line and token.column + len(token.text) == next_token.column
+
+    def _starts_attached_prefix_group(self):
+        token = self.peek()
+        return token.kind in ("SYMBOL", "OPERATOR") and token.text in ("!", "-") and self._is_attached_prefix_operator(token)
+
     def _rewrite_prefix(self, operator, value):
         symbol_name = {
             "!": "not",
@@ -317,9 +330,20 @@ class Parser(object):
         )
 
     def _is_known_call_head(self, form):
-        return isinstance(form, SymbolForm) and form.name in KNOWN_CALL_HEADS
+        return isinstance(form, SymbolForm) and form.name in self.known_heads
+
+    def _record_defined_head(self, form):
+        if not isinstance(form, ListForm) or not form.items or not isinstance(form.items[0], SymbolForm):
+            return
+        head = form.items[0].name
+        if head in ("procedure", "nprocedure", "mprocedure"):
+            signature = form.items[1] if len(form.items) > 1 else None
+            if isinstance(signature, ListForm) and signature.items and isinstance(signature.items[0], SymbolForm):
+                self.known_heads.add(signature.items[0].name)
+        if head in ("defun", "defmacro") and len(form.items) > 1 and isinstance(form.items[1], SymbolForm):
+            self.known_heads.add(form.items[1].name)
 
 
-def parse(source, filename="<string>"):
+def parse(source, filename="<string>", known_heads=None):
     tokens = tokenize(source, filename=filename)
-    return Parser(tokens).parse_forms()
+    return Parser(tokens, known_heads=known_heads).parse_forms()

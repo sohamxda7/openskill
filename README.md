@@ -1,3 +1,5 @@
+<!-- Author: Soham Sen <sensoham135@gmail.com> <sohamsen2000@outlook.com> -->
+
 # OpenSKILL - Run, Learn, and Explore SKILL Without Cadence Installed
 
 OpenSKILL lets you run SKILL locally, learn the language, and search an offline reference on your own computer without Cadence installed.

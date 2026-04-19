@@ -1,3 +1,5 @@
+; Author: Soham Sen <sensoham135@gmail.com> <sohamsen2000@outlook.com>
+
 ; A tiny vending-machine style state machine.
 (procedure (nextState state event)
   (caseq state

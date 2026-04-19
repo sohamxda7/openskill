@@ -1,3 +1,5 @@
+; Author: Soham Sen <sensoham135@gmail.com> <sohamsen2000@outlook.com>
+
 ; Define and call small reusable procedures.
 (defun areaRect (width height)
   width * height)

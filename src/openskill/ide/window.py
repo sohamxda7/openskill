@@ -1,3 +1,5 @@
+# Author: Soham Sen <sensoham135@gmail.com> <sohamsen2000@outlook.com>
+
 import tkinter as tk
 from tkinter import filedialog, ttk
 

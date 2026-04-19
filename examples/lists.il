@@ -1,3 +1,5 @@
+; Author: Soham Sen <sensoham135@gmail.com> <sohamsen2000@outlook.com>
+
 ; Literal data and list helpers.
 (let ((pins '(in out vdd gnd)))
   (println pins)

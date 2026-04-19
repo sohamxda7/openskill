@@ -1,3 +1,5 @@
+<!-- Author: Soham Sen <sensoham135@gmail.com> <sohamsen2000@outlook.com> -->
+
 # OpenSKILL User Manual
 
 This is the main user guide for OpenSKILL. Use it for the big picture, setup, day-to-day command usage, language basics, and beginner examples. For the full symbol catalog, see [`docs/command-reference.md`](command-reference.md).

@@ -1,3 +1,5 @@
+; Author: Soham Sen <sensoham135@gmail.com> <sohamsen2000@outlook.com>
+
 ; Assignment, loops, and branching.
 (setq sum 0)
 

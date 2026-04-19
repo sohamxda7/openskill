@@ -1,3 +1,5 @@
+# Author: Soham Sen <sensoham135@gmail.com> <sohamsen2000@outlook.com>
+
 [build-system]
 requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"

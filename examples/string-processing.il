@@ -1,3 +1,5 @@
+; Author: Soham Sen <sensoham135@gmail.com> <sohamsen2000@outlook.com>
+
 ; Parse a settings line and build a readable summary.
 (let ((line "width=12 height=5 label=m1_data"))
   (setq fields (parseString line " ="))

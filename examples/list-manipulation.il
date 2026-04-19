@@ -1,3 +1,5 @@
+; Author: Soham Sen <sensoham135@gmail.com> <sohamsen2000@outlook.com>
+
 ; Basic list construction, access, and mapping.
 (let ((pins '(vin vout vdd gnd)))
   (println (list 'original pins))

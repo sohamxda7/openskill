@@ -512,6 +512,8 @@ class EvaluatorTests(unittest.TestCase):
         )
         self.assertEqual(session.eval_text('(let ((fmt "v=%d")) (sprintf fmt 7))'), "v=7")
         self.assertEqual(session.eval_text('(sprintf "100%%")'), "100%")
+        self.assertEqual(session.eval_text('(sprintf "pair=%L" \'(1 2))'), 'pair=(1 2)')
+        self.assertEqual(session.eval_text('(sprintf "%s:%c:%n" "lib" "gpdk" 1.2)'), "lib:g:1.2")
         with self.assertRaises(SkillEvalError):
             session.eval_text('(sprintf "%d %d" 1)')
         self.assertEqual(session.eval_text('(strlen "hello")'), 5)
@@ -759,6 +761,29 @@ class EvaluatorTests(unittest.TestCase):
             format_value(session.eval_text('(let ((p (instring "10 20 30"))) (list (fscanf p "%d" "%d") (getc p) (eof p)))')),
             '(("10" "20") 3 nil)',
         )
+
+    def test_printf_supports_skill_default_format_directives(self):
+        session = SkillSession()
+        value = session.eval_text(
+            """
+            procedure(GetConfigValue(key configList)
+              let((pair)
+                pair = assoc(key configList)
+                if(pair then
+                  printf("Found %s: %L\\n" key cadr(pair))
+                  cadr(pair)
+                else
+                  printf("Key %s not found.\\n" key)
+                  nil
+                )
+              )
+            )
+            myConfigs = '(("lib" "gpdk045") ("view" "schematic") ("rev" 1.2))
+            GetConfigValue("lib" myConfigs)
+            """
+        )
+        self.assertEqual(value, "gpdk045")
+        self.assertEqual(session.output, ['Found lib: "gpdk045"\n'])
         with tempfile.TemporaryDirectory() as temp_dir:
             path = os.path.join(temp_dir, "sample.txt")
             program = """

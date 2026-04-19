@@ -794,11 +794,84 @@ def _raise_runtime_error(name, exc):
     raise SkillEvalError("%s failed: %s" % (name, exc))
 
 
+def _is_numeric_value(value):
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _require_integer_format_arg(name, directive, value):
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise SkillEvalError("%s failed: %%%s expects an integer" % (name, directive))
+    return value
+
+
+def _require_numeric_format_arg(name, directive, value):
+    if not _is_numeric_value(value):
+        raise SkillEvalError("%s failed: %%%s expects a number" % (name, directive))
+    return value
+
+
+def _require_string_like_format_arg(name, directive, value):
+    if isinstance(value, str):
+        return value
+    if isinstance(value, SkillSymbolValue):
+        return value.name
+    raise SkillEvalError("%s failed: %%%s expects a string or symbol" % (name, directive))
+
+
+def _render_skill_format_arg(name, spec, directive, value):
+    if directive in ("d", "o", "x"):
+        return spec % _require_integer_format_arg(name, directive, value)
+    if directive in ("f", "e", "g"):
+        return spec % _require_numeric_format_arg(name, directive, value)
+    if directive == "s":
+        return spec % _require_string_like_format_arg(name, directive, value)
+    if directive == "c":
+        text = _require_string_like_format_arg(name, directive, value)
+        if not text:
+            raise SkillEvalError("%s failed: %%c expects a non-empty string or symbol" % name)
+        return (spec[:-1] + "s") % text[0]
+    if directive in ("n", "N"):
+        return (spec[:-1] + "s") % str(_require_numeric_format_arg(name, directive, value))
+    if directive in ("L", "P", "B"):
+        return (spec[:-1] + "s") % format_value(value)
+    raise SkillEvalError("%s failed: unsupported format character '%%%s'" % (name, directive))
+
+
 def _format_text(name, fmt, values):
-    try:
-        return fmt % tuple(values)
-    except (TypeError, ValueError) as exc:
-        _raise_runtime_error(name, exc)
+    if not isinstance(fmt, str):
+        raise SkillEvalError("%s failed: format must be a string" % name)
+    parts = []
+    index = 0
+    value_index = 0
+    length = len(fmt)
+    while index < length:
+        char = fmt[index]
+        if char != "%":
+            parts.append(char)
+            index += 1
+            continue
+        if index + 1 < length and fmt[index + 1] == "%":
+            parts.append("%")
+            index += 2
+            continue
+        spec_end = index + 1
+        while spec_end < length and fmt[spec_end] in "#0- +0123456789.":
+            spec_end += 1
+        if spec_end >= length:
+            raise SkillEvalError("%s failed: incomplete format directive" % name)
+        directive = fmt[spec_end]
+        if value_index >= len(values):
+            raise SkillEvalError("%s failed: not enough format arguments" % name)
+        spec = fmt[index : spec_end + 1]
+        try:
+            parts.append(_render_skill_format_arg(name, spec, directive, values[value_index]))
+        except (TypeError, ValueError) as exc:
+            _raise_runtime_error(name, exc)
+        value_index += 1
+        index = spec_end + 1
+    if value_index != len(values):
+        raise SkillEvalError("%s failed: too many format arguments" % name)
+    return "".join(parts)
 
 
 def _consume_loop_iteration(session, name):

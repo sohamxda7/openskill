@@ -516,6 +516,10 @@ class EvaluatorTests(unittest.TestCase):
         self.assertEqual(session.eval_text('(sprintf "%s:%c:%n" "lib" "gpdk" 1.2)'), "lib:g:1.2")
         with self.assertRaises(SkillEvalError):
             session.eval_text('(sprintf "%d %d" 1)')
+        with self.assertRaises(SkillEvalError):
+            session.eval_text('(atoi "abc")')
+        with self.assertRaises(SkillEvalError):
+            session.eval_text('(atof "abc")')
         self.assertEqual(session.eval_text('(strlen "hello")'), 5)
         self.assertEqual(session.eval_text('(strcmp "abc" "abd")'), -1)
         self.assertEqual(session.eval_text('(substr "abcdef" 2 3)'), "cde")
@@ -526,6 +530,15 @@ class EvaluatorTests(unittest.TestCase):
         self.assertTrue(session.eval_text("(floatp 4.5)"))
         self.assertTrue(session.eval_text("(zerop 0)"))
         self.assertTrue(session.eval_text("(plusp 4)"))
+        self.assertIsNone(session.eval_text("(numberp t)"))
+        self.assertIsNone(session.eval_text("(zerop t)"))
+        self.assertIsNone(session.eval_text("(onep t)"))
+        self.assertIsNone(session.eval_text("(plusp nil)"))
+        self.assertIsNone(session.eval_text("(minusp nil)"))
+        self.assertIsNone(session.eval_text("(evenp t)"))
+        self.assertIsNone(session.eval_text("(oddp nil)"))
+        with self.assertRaises(SkillEvalError):
+            session.eval_text('(< "abc" 1)')
         self.assertTrue(session.eval_text("(neq 1 2)"))
         self.assertTrue(session.eval_text("(nequal '(1 2) '(2 3))"))
         self.assertEqual(format_value(session.eval_text('(concat "a" 1 "b")')), "a1b")
@@ -634,6 +647,7 @@ class EvaluatorTests(unittest.TestCase):
             ),
             "(t 9)",
         )
+
         with self.assertRaises(SkillEvalError):
             session.eval_text("(let ((a (array 3 0))) (arrayref a 10))")
         self.assertIsNone(session.eval_text("(arrayp '(1 2 3))"))
@@ -731,6 +745,11 @@ class EvaluatorTests(unittest.TestCase):
             ),
             "(((a b) nil) ((a) (a b)))",
         )
+
+    def test_random_is_not_fixed_across_new_sessions(self):
+        first = SkillSession().eval_text("(random)")
+        second = SkillSession().eval_text("(random)")
+        self.assertNotEqual(first, second)
 
     def test_port_and_file_helpers(self):
         session = SkillSession()
@@ -1020,6 +1039,10 @@ class EvaluatorTests(unittest.TestCase):
         self.assertEqual(session.eval_text('(rexReplace "a+" "x" "caaat")'), "cxt")
         self.assertEqual(session.eval_text('(rexSubstitute "a+" "x" "caaat")'), "cxt")
         self.assertEqual(format_value(session.eval_text('(intern "chip")')), "chip")
+        with self.assertRaises(SkillEvalError):
+            session.eval_text('(rexCompile "[a-")')
+        with self.assertRaises(SkillEvalError):
+            session.eval_text("(intern 42)")
         self.assertEqual(session.eval_text("(symbolName 'chip)"), "chip")
         self.assertTrue(session.eval_text("(fixp 7)"))
         self.assertTrue(session.eval_text("(minusp -1)"))

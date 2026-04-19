@@ -4,6 +4,7 @@ import errno
 import os
 import random
 
+from openskill.interpreter.errors import SkillError
 from openskill.interpreter.evaluator import create_global_env, evaluate, format_value
 from openskill.interpreter.parser import parse
 
@@ -18,7 +19,7 @@ class SkillSession(object):
         self.symbol_plists = {}
         self.class_registry = {}
         self.gensym_counter = 0
-        self.random_state = random.Random(0)
+        self.random_state = random.Random()
         self.warnings = []
         self.skill_path = [self.cwd]
         self.max_loop_iterations = 100000
@@ -70,8 +71,11 @@ class SkillSession(object):
 
     def load_file(self, path):
         resolved = self.resolve_existing_path(path, search_skill_path=True)
-        with open(resolved, "r") as handle:
-            source = handle.read()
+        try:
+            with open(resolved, "r", encoding="utf-8") as handle:
+                source = handle.read()
+        except UnicodeDecodeError:
+            raise SkillError("Could not decode SKILL source file as UTF-8: %s" % resolved)
         self._load_stack.append(os.path.dirname(resolved))
         try:
             return self.eval_text(source, filename=resolved)

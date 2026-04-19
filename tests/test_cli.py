@@ -4,6 +4,7 @@ import contextlib
 import io
 import os
 import sys
+import tempfile
 import unittest
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
@@ -40,6 +41,30 @@ class CliTests(unittest.TestCase):
         self.assertIn("missing.il", rendered)
         self.assertNotIn("Traceback", rendered)
 
+    def test_expr_regex_errors_return_nonzero_without_traceback(self):
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            code = main(["--expr", '(rexCompile "[a-")'])
+        self.assertEqual(code, 1)
+        rendered = stderr.getvalue()
+        self.assertIn("rexCompile failed", rendered)
+        self.assertNotIn("Traceback", rendered)
+
+    def test_script_decode_errors_return_nonzero_without_traceback(self):
+        stderr = io.StringIO()
+        with tempfile.NamedTemporaryFile(delete=False) as handle:
+            handle.write(b"\xff")
+            path = handle.name
+        try:
+            with contextlib.redirect_stderr(stderr):
+                code = main([path])
+        finally:
+            os.unlink(path)
+        self.assertEqual(code, 1)
+        rendered = stderr.getvalue()
+        self.assertIn("Could not decode SKILL source file", rendered)
+        self.assertNotIn("Traceback", rendered)
+
 
 class ReplTests(unittest.TestCase):
     def test_repl_handles_quit(self):
@@ -65,6 +90,14 @@ class ReplTests(unittest.TestCase):
         rendered = output_stream.getvalue()
         self.assertIn('"text (("', rendered)
         self.assertNotIn("Interpreter placeholder", rendered)
+
+    def test_repl_reports_unterminated_string_without_crashing(self):
+        input_stream = io.StringIO('"unterminated\n:quit\n')
+        output_stream = io.StringIO()
+        code = start_repl(input_stream=input_stream, output_stream=output_stream)
+        self.assertEqual(code, 0)
+        rendered = output_stream.getvalue()
+        self.assertIn("unterminated string literal", rendered)
 
 
 if __name__ == "__main__":

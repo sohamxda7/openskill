@@ -425,8 +425,12 @@ class OpenSkillWindow(object):
         path = filedialog.askopenfilename(filetypes=[("SKILL files", "*.il *.skill"), ("All files", "*.*")])
         if not path:
             return
-        with open(path, "r") as handle:
-            content = handle.read()
+        try:
+            with open(path, "r", encoding="utf-8") as handle:
+                content = handle.read()
+        except (OSError, UnicodeError) as exc:
+            self.log.insert(tk.END, "Open failed: {0}\n".format(exc))
+            return
         self.current_path = path
         self.editor.delete("1.0", tk.END)
         self.editor.insert("1.0", content)
@@ -436,9 +440,14 @@ class OpenSkillWindow(object):
     def _save_file(self):
         if not self.current_path:
             return self._save_file_as()
-        with open(self.current_path, "w") as handle:
-            handle.write(self.editor.get("1.0", tk.END))
+        try:
+            with open(self.current_path, "w", encoding="utf-8") as handle:
+                handle.write(self.editor.get("1.0", "end-1c"))
+        except (OSError, UnicodeError) as exc:
+            self.log.insert(tk.END, "Save failed: {0}\n".format(exc))
+            return False
         self.log.insert(tk.END, "Saved {0}\n".format(self.current_path))
+        return True
 
     def _save_file_as(self):
         path = filedialog.asksaveasfilename(
@@ -446,9 +455,13 @@ class OpenSkillWindow(object):
             filetypes=[("SKILL files", "*.il *.skill"), ("All files", "*.*")],
         )
         if not path:
-            return
+            return False
+        previous_path = self.current_path
         self.current_path = path
-        self._save_file()
+        if not self._save_file():
+            self.current_path = previous_path
+            return False
+        return True
 
     def _on_search(self, event=None):
         del event

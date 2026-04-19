@@ -15,6 +15,8 @@ OpenSKILL is a standalone workbench for writing and running a practical subset o
 
 It is useful for learning SKILL syntax, prototyping standalone scripts, and looking up supported commands locally.
 
+OpenSKILL executes local file operations with your current user permissions. Run only trusted SKILL scripts, especially when they use file or directory APIs.
+
 ## 2. What OpenSKILL is not
 
 OpenSKILL is not a full replacement for Cadence tools. This repository does **not** currently provide:

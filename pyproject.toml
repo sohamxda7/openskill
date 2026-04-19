@@ -12,7 +12,7 @@ readme = "README.md"
 requires-python = ">=3.8"
 license = {text = "GPL-3.0-or-later"}
 authors = [
-  {name = "sohamxda7", email = "sensoham135@gmail.com"}
+  {name = "Soham Sen", email = "sensoham135@gmail.com"}
 ]
 classifiers = [
   "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",

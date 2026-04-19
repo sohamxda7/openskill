@@ -260,12 +260,16 @@ class Parser(object):
             return None
         if token.text not in self.INFIX_PRECEDENCE:
             return None
+        if self.index + 1 >= len(self.tokens):
+            return None
         next_token = self.tokens[self.index + 1]
         if next_token.kind in ("RPAREN", "EOF"):
             return None
         return token
 
     def _is_attached_prefix_operator(self, token):
+        if self.index + 1 >= len(self.tokens):
+            return False
         next_token = self.tokens[self.index + 1]
         if next_token.kind in ("EOF", "RPAREN"):
             return False

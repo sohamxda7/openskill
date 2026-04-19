@@ -3,6 +3,7 @@
 from __future__ import print_function
 
 from openskill.apifinder.index import search
+from openskill.interpreter.errors import SkillSyntaxError
 from openskill.interpreter.lexer import tokenize
 from openskill.interpreter.runtime import SkillSession, format_value
 
@@ -91,9 +92,12 @@ def start_repl(input_stream=None, output_stream=None, session=None):
 
 def _paren_balance(source):
     balance = 0
-    for token in tokenize(source, filename="<repl-balance>"):
-        if token.kind == "LPAREN":
-            balance += 1
-        elif token.kind == "RPAREN":
-            balance -= 1
+    try:
+        for token in tokenize(source, filename="<repl-balance>"):
+            if token.kind == "LPAREN":
+                balance += 1
+            elif token.kind == "RPAREN":
+                balance -= 1
+    except SkillSyntaxError:
+        return 0
     return balance

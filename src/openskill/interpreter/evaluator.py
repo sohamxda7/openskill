@@ -1681,6 +1681,8 @@ def _builtin_plist(session, *args):
 
 def _builtin_intern(session, *args):
     _require_args("intern", args, exact=1)
+    if not isinstance(args[0], str):
+        raise SkillEvalError("intern expects a string")
     return SkillSymbolValue(args[0])
 
 
@@ -1828,7 +1830,7 @@ def _builtin_stringp(session, *args):
 
 def _builtin_numberp(session, *args):
     _require_args("numberp", args, exact=1)
-    return True if isinstance(args[0], (int, float)) else None
+    return True if _is_numeric_value(args[0]) else None
 
 
 def _builtin_integerp(session, *args):
@@ -1843,32 +1845,32 @@ def _builtin_floatp(session, *args):
 
 def _builtin_zerop(session, *args):
     _require_args("zerop", args, exact=1)
-    return True if args[0] == 0 else None
+    return True if _is_numeric_value(args[0]) and args[0] == 0 else None
 
 
 def _builtin_plusp(session, *args):
     _require_args("plusp", args, exact=1)
-    return True if args[0] > 0 else None
+    return True if _is_numeric_value(args[0]) and args[0] > 0 else None
 
 
 def _builtin_onep(session, *args):
     _require_args("onep", args, exact=1)
-    return True if args[0] == 1 else None
+    return True if _is_numeric_value(args[0]) and args[0] == 1 else None
 
 
 def _builtin_minusp(session, *args):
     _require_args("minusp", args, exact=1)
-    return True if args[0] < 0 else None
+    return True if _is_numeric_value(args[0]) and args[0] < 0 else None
 
 
 def _builtin_evenp(session, *args):
     _require_args("evenp", args, exact=1)
-    return True if args[0] % 2 == 0 else None
+    return True if isinstance(args[0], int) and not isinstance(args[0], bool) and args[0] % 2 == 0 else None
 
 
 def _builtin_oddp(session, *args):
     _require_args("oddp", args, exact=1)
-    return True if args[0] % 2 != 0 else None
+    return True if isinstance(args[0], int) and not isinstance(args[0], bool) and args[0] % 2 != 0 else None
 
 
 def _builtin_fixp(session, *args):
@@ -1878,17 +1880,20 @@ def _builtin_fixp(session, *args):
 def _builtin_compare(op):
     def inner(session, *args):
         _require_args(op, args, minimum=2)
-        for left, right in zip(args, args[1:]):
-            if op == "=" and not left == right:
-                return None
-            if op == "<" and not left < right:
-                return None
-            if op == "<=" and not left <= right:
-                return None
-            if op == ">" and not left > right:
-                return None
-            if op == ">=" and not left >= right:
-                return None
+        try:
+            for left, right in zip(args, args[1:]):
+                if op == "=" and not left == right:
+                    return None
+                if op == "<" and not left < right:
+                    return None
+                if op == "<=" and not left <= right:
+                    return None
+                if op == ">" and not left > right:
+                    return None
+                if op == ">=" and not left >= right:
+                    return None
+        except TypeError as exc:
+            _raise_runtime_error(op, exc)
         return True
 
     return inner
@@ -2047,7 +2052,10 @@ def _ensure_regex(value, name):
     if isinstance(value, SkillRegex):
         return value
     if isinstance(value, str):
-        return SkillRegex(value)
+        try:
+            return SkillRegex(value)
+        except re.error as exc:
+            _raise_runtime_error(name, exc)
     raise SkillEvalError("%s expects a pattern string or compiled regex" % name)
 
 
@@ -2080,12 +2088,18 @@ def _builtin_rex_substitute(session, *args):
 
 def _builtin_atoi(session, *args):
     _require_args("atoi", args, exact=1)
-    return int(args[0])
+    try:
+        return int(args[0])
+    except (TypeError, ValueError) as exc:
+        _raise_runtime_error("atoi", exc)
 
 
 def _builtin_atof(session, *args):
     _require_args("atof", args, exact=1)
-    return float(args[0])
+    try:
+        return float(args[0])
+    except (TypeError, ValueError) as exc:
+        _raise_runtime_error("atof", exc)
 
 
 def _builtin_fix(session, *args):

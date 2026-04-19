@@ -65,6 +65,9 @@ class EditorSupportTests(unittest.TestCase):
         self.assertIn("helperFn", highlighted)
         self.assertNotIn("skip", highlighted)
 
+    def test_syntax_highlight_ranges_ignore_partial_invalid_input(self):
+        self.assertEqual(syntax_highlight_ranges('"', ["println"], '"'), [])
+
     def test_should_show_completion_popup_hides_exact_match_only(self):
         self.assertTrue(should_show_completion_popup("pr", ["println"]))
         self.assertTrue(should_show_completion_popup("println", ["println", "printf"]))

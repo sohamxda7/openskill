@@ -2,6 +2,7 @@
 
 import re
 
+from openskill.interpreter.errors import SkillSyntaxError
 from openskill.interpreter.lexer import tokenize
 
 
@@ -110,16 +111,19 @@ def completion_candidates(prefix, catalog_symbols, source, limit=12):
 def syntax_highlight_ranges(text, catalog_symbols, source):
     highlightable = set(editor_symbols(catalog_symbols, source))
     ranges = []
-    for token in tokenize(text):
-        if token.kind == "EOF":
-            continue
-        if token.kind not in ("SYMBOL", "OPERATOR", "ARROW"):
-            continue
-        if token.text not in highlightable:
-            continue
-        start = "%d.%d" % (token.line, token.column - 1)
-        end = "%d.%d" % (token.line, token.column - 1 + len(token.text))
-        ranges.append((start, end, token.text))
+    try:
+        for token in tokenize(text):
+            if token.kind == "EOF":
+                continue
+            if token.kind not in ("SYMBOL", "OPERATOR", "ARROW"):
+                continue
+            if token.text not in highlightable:
+                continue
+            start = "%d.%d" % (token.line, token.column - 1)
+            end = "%d.%d" % (token.line, token.column - 1 + len(token.text))
+            ranges.append((start, end, token.text))
+    except SkillSyntaxError:
+        return []
     return ranges
 
 

@@ -13,12 +13,15 @@ from openskill.runtime.repl import start_repl
 
 def _emit_result(session, result):
     emitted = False
+    last_output = None
     if session.output:
+        last_output = session.output[-1]
         print("\n".join(session.output))
         session.output[:] = []
         emitted = True
-    if result is not None and not (emitted and result is True):
-        print(format_value(result))
+    rendered = format_value(result) if result is not None else None
+    if rendered is not None and not (emitted and (result is True or rendered == last_output)):
+        print(rendered)
 
 
 def _run_repl(session):

@@ -386,11 +386,14 @@ class OpenSkillWindow(object):
             result = session.eval_text(source, filename=self.current_path or "<editor>")
             self.console.delete("1.0", tk.END)
             emitted = False
+            last_output = None
             if session.output:
+                last_output = session.output[-1]
                 self._append_console("\n".join(session.output))
                 emitted = True
-            if result is not None and not (emitted and result is True):
-                self._append_console(format_value(result))
+            rendered = format_value(result) if result is not None else None
+            if rendered is not None and not (emitted and (result is True or rendered == last_output)):
+                self._append_console(rendered)
             self.log.insert(tk.END, "Run succeeded.\n")
         except Exception as exc:
             self.console.delete("1.0", tk.END)
@@ -406,12 +409,15 @@ class OpenSkillWindow(object):
         try:
             result = self.run_session.eval_text(line, filename="<gui-repl>")
             emitted = False
+            last_output = None
             if self.run_session.output:
+                last_output = self.run_session.output[-1]
                 self._append_console("\n".join(self.run_session.output), widget=self.repl_output)
                 self.run_session.output[:] = []
                 emitted = True
-            if result is not None and not (emitted and result is True):
-                self._append_console(format_value(result), widget=self.repl_output)
+            rendered = format_value(result) if result is not None else None
+            if rendered is not None and not (emitted and (result is True or rendered == last_output)):
+                self._append_console(rendered, widget=self.repl_output)
         except Exception as exc:
             self._append_console(str(exc), widget=self.repl_output)
 

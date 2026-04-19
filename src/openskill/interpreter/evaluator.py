@@ -1829,7 +1829,9 @@ def _builtin_not(session, *args):
 def _builtin_print(session, *args):
     text = " ".join(format_value(arg) for arg in args)
     session.output.append(text)
-    return True
+    if not args:
+        return None
+    return args[-1]
 
 
 def _builtin_println(session, *args):

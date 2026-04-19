@@ -320,7 +320,7 @@ class EvaluatorTests(unittest.TestCase):
             list(hit1 hit2 hit3 hit4)
             """
         )
-        self.assertEqual(value, [None, True, True, True])
+        self.assertEqual(value, [None, "right", "then branch", "fallback"])
         self.assertEqual(session.output, ['"right"', '"then branch"', '"fallback"'])
 
     def test_if_without_then_still_supports_infix_conditions(self):
@@ -335,8 +335,30 @@ class EvaluatorTests(unittest.TestCase):
               unless(a >= 2 println("unless branch")))
             """
         )
-        self.assertEqual(value, [11, 22, True, True])
+        self.assertEqual(value, [11, 22, "when branch", "unless branch"])
         self.assertEqual(session.output, ['"when branch"', '"unless branch"'])
+
+    def test_println_returns_printed_value_for_recursive_list_code(self):
+        session = SkillSession()
+        value = session.eval_text(
+            """
+            procedure(MyFlattenList(data)
+              let((result)
+                foreach(item data
+                  if(listp(item) then
+                    result = append(result MyFlattenList(item))
+                  else
+                    result = append(result list(item))
+                  )
+                )
+                println(result)
+              )
+            )
+            MyFlattenList('(1 (2 3) ((4)) 5))
+            """
+        )
+        self.assertEqual(value, [1, 2, 3, 4, 5])
+        self.assertEqual(session.output[-1], "(1 2 3 4 5)")
 
     def test_logical_or_and_comparisons_in_classic_syntax(self):
         session = SkillSession()

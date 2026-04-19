@@ -75,12 +75,15 @@ def start_repl(input_stream=None, output_stream=None, session=None):
         try:
             result = session.eval_text(source, filename="<repl>")
             emitted = False
+            last_output = None
             if session.output:
+                last_output = session.output[-1]
                 output_stream.write("\n".join(session.output) + "\n")
                 session.output[:] = []
                 emitted = True
-            if result is not None and not (emitted and result is True):
-                output_stream.write(format_value(result) + "\n")
+            rendered = format_value(result) if result is not None else None
+            if rendered is not None and not (emitted and (result is True or rendered == last_output)):
+                output_stream.write(rendered + "\n")
         except Exception as exc:
             output_stream.write(str(exc) + "\n")
         output_stream.flush()

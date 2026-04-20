@@ -10,20 +10,37 @@ _DATA_PATHS = [
 ]
 
 
+def _validate_index(data):
+    if not isinstance(data, list):
+        raise ValueError("API index must be a list of entries")
+    normalized = []
+    for item in data:
+        if not isinstance(item, dict):
+            raise ValueError("API index entries must be objects")
+        normalized.append(item)
+    return normalized
+
+
 def load_index(path=None):
     if path:
-        with open(path, "r") as handle:
-            return json.load(handle)
+        with open(path, "r", encoding="utf-8") as handle:
+            return _validate_index(json.load(handle))
     try:
         bundled = pkgutil.get_data("openskill", "api/catalog.json")
-    except (IOError, OSError):
+    except (IOError, OSError, ValueError):
         bundled = None
     if bundled is not None:
-        return json.loads(bundled.decode("utf-8"))
+        try:
+            return _validate_index(json.loads(bundled.decode("utf-8")))
+        except (UnicodeDecodeError, ValueError):
+            return []
     for candidate in _DATA_PATHS:
         if os.path.exists(candidate):
-            with open(candidate, "r") as handle:
-                return json.load(handle)
+            try:
+                with open(candidate, "r", encoding="utf-8") as handle:
+                    return _validate_index(json.load(handle))
+            except (OSError, ValueError):
+                return []
     return []
 
 

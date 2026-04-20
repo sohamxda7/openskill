@@ -2,6 +2,7 @@
 
 import os
 import sys
+import tempfile
 import unittest
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
@@ -19,6 +20,7 @@ from openskill.ide.editor_support import (
     symbol_fragment_bounds,
     syntax_highlight_ranges,
 )
+from openskill.ide.fileio import read_editor_file, write_editor_file
 
 
 class EditorSupportTests(unittest.TestCase):
@@ -68,6 +70,13 @@ class EditorSupportTests(unittest.TestCase):
     def test_syntax_highlight_ranges_ignore_partial_invalid_input(self):
         self.assertEqual(syntax_highlight_ranges('"', ["println"], '"'), [])
 
+    def test_syntax_highlight_ranges_keep_valid_prefix_on_partial_error(self):
+        source = '(procedure (helperFn value) value)\n"unterminated'
+        ranges = syntax_highlight_ranges(source, ["procedure"], source)
+        highlighted = [token for _, _, token in ranges]
+        self.assertIn("procedure", highlighted)
+        self.assertIn("helperFn", highlighted)
+
     def test_should_show_completion_popup_hides_exact_match_only(self):
         self.assertTrue(should_show_completion_popup("pr", ["println"]))
         self.assertTrue(should_show_completion_popup("println", ["println", "printf"]))
@@ -113,6 +122,59 @@ class EditorSupportTests(unittest.TestCase):
 
     def test_line_number_text_covers_each_line(self):
         self.assertEqual(line_number_text("a\nb\nc"), "1\n2\n3")
+
+    def test_read_editor_file_accepts_bom(self):
+        with tempfile.NamedTemporaryFile("wb", suffix=".il", delete=False) as handle:
+            handle.write(b"\xef\xbb\xbf(println \"ok\")\n")
+            path = handle.name
+        try:
+            self.assertEqual(read_editor_file(path), '(println "ok")\n')
+        finally:
+            os.unlink(path)
+
+    def test_read_editor_file_rejects_binary_data(self):
+        with tempfile.NamedTemporaryFile("wb", suffix=".il", delete=False) as handle:
+            handle.write(b"\x00\x01skill")
+            path = handle.name
+        try:
+            with self.assertRaises(ValueError):
+                read_editor_file(path)
+        finally:
+            os.unlink(path)
+
+    def test_write_editor_file_replaces_existing_content(self):
+        with tempfile.NamedTemporaryFile("w", suffix=".il", delete=False) as handle:
+            handle.write("old")
+            path = handle.name
+        try:
+            write_editor_file(path, "new")
+            with open(path, "r", encoding="utf-8") as handle:
+                self.assertEqual(handle.read(), "new")
+        finally:
+            os.unlink(path)
+
+    def test_write_editor_file_preserves_symlink_targets(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target = os.path.join(temp_dir, "target.il")
+            link = os.path.join(temp_dir, "link.il")
+            with open(target, "w", encoding="utf-8") as handle:
+                handle.write("old")
+            os.symlink(target, link)
+            write_editor_file(link, "new")
+            self.assertTrue(os.path.islink(link))
+            with open(target, "r", encoding="utf-8") as handle:
+                self.assertEqual(handle.read(), "new")
+
+    def test_write_editor_file_preserves_existing_mode(self):
+        with tempfile.NamedTemporaryFile("w", suffix=".il", delete=False) as handle:
+            handle.write("old")
+            path = handle.name
+        try:
+            os.chmod(path, 0o755)
+            write_editor_file(path, "new")
+            self.assertEqual(os.stat(path).st_mode & 0o777, 0o755)
+        finally:
+            os.unlink(path)
 
 
 if __name__ == "__main__":

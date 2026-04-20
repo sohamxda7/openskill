@@ -32,28 +32,41 @@ def start_repl(input_stream=None, output_stream=None, session=None):
     while True:
         output_stream.write("openskill> ")
         output_stream.flush()
-        line = input_stream.readline()
+        try:
+            line = input_stream.readline()
+        except KeyboardInterrupt:
+            buffer_lines = []
+            paren_balance = 0
+            output_stream.write("Interrupted.\n")
+            output_stream.flush()
+            continue
         if not line:
+            if buffer_lines:
+                _evaluate_repl_source(session, output_stream, "\n".join(buffer_lines))
             output_stream.write("\n")
+            session.cleanup()
             return 0
 
         line = line.strip()
         if not line:
             continue
-        if line == ":quit":
+        if not buffer_lines and line == ":quit":
+            session.cleanup()
             return 0
-        if line == ":help":
+        if not buffer_lines and line == ":help":
             output_stream.write(HELP_TEXT)
             output_stream.flush()
             continue
-        if line == ":reset":
-            session = SkillSession()
+        if not buffer_lines and line == ":reset":
+            current_cwd = session.cwd
+            session.cleanup()
+            session = SkillSession(cwd=current_cwd)
             buffer_lines = []
             paren_balance = 0
             output_stream.write("Session reset.\n")
             output_stream.flush()
             continue
-        if line.startswith(":api "):
+        if not buffer_lines and line.startswith(":api "):
             query = line[5:].strip()
             results = search(query)
             if results:
@@ -70,24 +83,9 @@ def start_repl(input_stream=None, output_stream=None, session=None):
         paren_balance = _paren_balance("\n".join(buffer_lines))
         if paren_balance > 0:
             continue
-        source = "\n".join(buffer_lines)
+        _evaluate_repl_source(session, output_stream, "\n".join(buffer_lines))
         buffer_lines = []
         paren_balance = 0
-        try:
-            result = session.eval_text(source, filename="<repl>")
-            emitted = False
-            last_output = None
-            if session.output:
-                last_output = session.output[-1]
-                output_stream.write("\n".join(session.output) + "\n")
-                session.output[:] = []
-                emitted = True
-            rendered = format_value(result) if result is not None else None
-            if rendered is not None and not (emitted and (result is True or rendered == last_output)):
-                output_stream.write(rendered + "\n")
-        except Exception as exc:
-            output_stream.write(str(exc) + "\n")
-        output_stream.flush()
 
 
 def _paren_balance(source):
@@ -98,6 +96,26 @@ def _paren_balance(source):
                 balance += 1
             elif token.kind == "RPAREN":
                 balance -= 1
-    except SkillSyntaxError:
+    except SkillSyntaxError as exc:
+        if "unterminated string" in exc.message:
+            return 1
         return 0
     return balance
+
+
+def _evaluate_repl_source(session, output_stream, source):
+    try:
+        result = session.eval_text(source, filename="<repl>")
+        emitted = False
+        last_output = None
+        if session.output:
+            last_output = session.output[-1]
+            output_stream.write("\n".join(session.output) + "\n")
+            session.output[:] = []
+            emitted = True
+        rendered = format_value(result) if result is not None else None
+        if rendered is not None and not (emitted and (result is True or rendered == last_output)):
+            output_stream.write(rendered + "\n")
+    except Exception as exc:
+        output_stream.write(str(exc) + "\n")
+    output_stream.flush()

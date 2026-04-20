@@ -112,18 +112,28 @@ def syntax_highlight_ranges(text, catalog_symbols, source):
     highlightable = set(editor_symbols(catalog_symbols, source))
     ranges = []
     try:
-        for token in tokenize(text):
-            if token.kind == "EOF":
-                continue
-            if token.kind not in ("SYMBOL", "OPERATOR", "ARROW"):
-                continue
-            if token.text not in highlightable:
-                continue
-            start = "%d.%d" % (token.line, token.column - 1)
-            end = "%d.%d" % (token.line, token.column - 1 + len(token.text))
-            ranges.append((start, end, token.text))
-    except SkillSyntaxError:
-        return []
+        tokens = tokenize(text)
+    except SkillSyntaxError as exc:
+        if exc.line is None or exc.column is None:
+            return []
+        lines = text.splitlines(True)
+        if exc.line - 1 >= len(lines):
+            return []
+        prefix = "".join(lines[: exc.line - 1]) + lines[exc.line - 1][: max(exc.column - 1, 0)]
+        try:
+            tokens = tokenize(prefix)
+        except SkillSyntaxError:
+            return []
+    for token in tokens:
+        if token.kind == "EOF":
+            continue
+        if token.kind not in ("SYMBOL", "OPERATOR", "ARROW"):
+            continue
+        if token.text not in highlightable:
+            continue
+        start = "%d.%d" % (token.line, token.column - 1)
+        end = "%d.%d" % (token.line, token.column - 1 + len(token.text))
+        ranges.append((start, end, token.text))
     return ranges
 
 

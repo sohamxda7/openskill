@@ -24,6 +24,7 @@ class SkillSession(object):
         self.skill_path = [self.cwd]
         self.max_loop_iterations = 100000
         self.loop_iterations = 0
+        self._open_ports = []
 
     def eval_text(self, source, filename="<string>"):
         self.loop_iterations = 0
@@ -32,11 +33,14 @@ class SkillSession(object):
             for name, value in self.global_env.values.items()
             if callable(value) or hasattr(value, "invoke") or hasattr(value, "expand")
         }
-        forms = parse(source, filename=filename, known_heads=known_heads)
-        result = None
-        for form in forms:
-            result = evaluate(form, self.global_env, self)
-        return result
+        try:
+            forms = parse(source, filename=filename, known_heads=known_heads)
+            result = None
+            for form in forms:
+                result = evaluate(form, self.global_env, self)
+            return result
+        except RecursionError:
+            raise SkillError("Expression is too deeply nested to evaluate safely")
 
     def resolve_path(self, path, base_dir=None):
         raw = str(path)
@@ -72,7 +76,7 @@ class SkillSession(object):
     def load_file(self, path):
         resolved = self.resolve_existing_path(path, search_skill_path=True)
         try:
-            with open(resolved, "r", encoding="utf-8") as handle:
+            with open(resolved, "r", encoding="utf-8-sig") as handle:
                 source = handle.read()
         except UnicodeDecodeError:
             raise SkillError("Could not decode SKILL source file as UTF-8: %s" % resolved)
@@ -81,6 +85,21 @@ class SkillSession(object):
             return self.eval_text(source, filename=resolved)
         finally:
             self._load_stack.pop()
+
+    def register_port(self, port):
+        self._open_ports.append(port)
+        return port
+
+    def unregister_port(self, port):
+        self._open_ports = [item for item in self._open_ports if item is not port]
+
+    def cleanup(self):
+        for port in list(self._open_ports):
+            try:
+                port.close()
+            except Exception:
+                pass
+            self.unregister_port(port)
 
 
 __all__ = ["SkillSession", "format_value"]

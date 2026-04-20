@@ -100,16 +100,22 @@ def main(argv=None):
     session = SkillSession(cwd=os.getcwd())
     if args.expr:
         def _eval_expr():
-            value = session.eval_text(args.expr, filename="<expr>")
-            _emit_result(session, value)
-            return 0
+            try:
+                value = session.eval_text(args.expr, filename="<expr>")
+                _emit_result(session, value)
+                return 0
+            finally:
+                session.cleanup()
 
         return _run_cli_action(_eval_expr)
     if args.script:
         def _run_script():
-            value = session.load_file(args.script)
-            _emit_result(session, value)
-            return 0
+            try:
+                value = session.load_file(args.script)
+                _emit_result(session, value)
+                return 0
+            finally:
+                session.cleanup()
 
         return _run_cli_action(_run_script)
     return _run_repl(session)

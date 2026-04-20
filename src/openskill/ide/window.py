@@ -12,6 +12,7 @@ from openskill.ide.editor_support import (
     symbol_fragment_bounds,
     syntax_highlight_ranges,
 )
+from openskill.ide.fileio import read_editor_file, write_editor_file
 from openskill.interpreter.runtime import SkillSession, format_value
 
 
@@ -29,6 +30,10 @@ class OpenSkillWindow(object):
         self._completion_range = None
 
         self._build_layout()
+        self.root.bind("<Control-o>", self._open_file)
+        self.root.bind("<Control-s>", self._save_file)
+        self.root.bind("<Control-r>", self._run_editor)
+        self.root.protocol("WM_DELETE_WINDOW", self._close_window)
         self._refresh_editor_decorations()
 
     def _build_layout(self):
@@ -72,7 +77,7 @@ class OpenSkillWindow(object):
             takefocus=0,
             state="disabled",
             background="#f3f4f6",
-            foreground="#6b7280",
+            foreground="#4b5563",
             relief="flat",
         )
         self.line_numbers.grid(row=0, column=0, sticky="ns")
@@ -138,7 +143,7 @@ class OpenSkillWindow(object):
 
         self.editor.tag_configure("keyword", foreground="#1f5fbf")
         self.editor.tag_configure("matching_bracket", background="#fff2a8", foreground="#111827")
-        self.editor.tag_configure("unmatched_bracket", foreground="#dc2626")
+        self.editor.tag_configure("unmatched_bracket", foreground="#dc2626", underline=True)
         for depth, color in enumerate(BRACKET_PALETTE):
             self.editor.tag_configure("bracket_depth_%d" % depth, foreground=color)
 
@@ -225,7 +230,12 @@ class OpenSkillWindow(object):
             self._completion_popup = tk.Toplevel(self.root)
             self._completion_popup.wm_overrideredirect(True)
             self._completion_popup.attributes("-topmost", True)
-            self._completion_listbox = tk.Listbox(self._completion_popup, exportselection=False, height=8)
+            self._completion_listbox = tk.Listbox(
+                self._completion_popup,
+                exportselection=False,
+                height=8,
+                takefocus=1,
+            )
             self._completion_listbox.pack(fill="both", expand=True)
             self._completion_listbox.bind("<Double-Button-1>", self._completion_accept)
 
@@ -379,7 +389,8 @@ class OpenSkillWindow(object):
         widget.insert(tk.END, message.rstrip() + "\n")
         widget.see(tk.END)
 
-    def _run_editor(self):
+    def _run_editor(self, event=None):
+        del event
         source = self.editor.get("1.0", tk.END)
         session = SkillSession()
         try:
@@ -399,6 +410,8 @@ class OpenSkillWindow(object):
             self.console.delete("1.0", tk.END)
             self._append_console(str(exc))
             self.log.insert(tk.END, "Run failed.\n")
+        finally:
+            session.cleanup()
 
     def _run_repl_line(self, event=None):
         del event
@@ -421,33 +434,36 @@ class OpenSkillWindow(object):
         except Exception as exc:
             self._append_console(str(exc), widget=self.repl_output)
 
-    def _open_file(self):
+    def _open_file(self, event=None):
+        del event
+        self._hide_completion_popup()
         path = filedialog.askopenfilename(filetypes=[("SKILL files", "*.il *.skill"), ("All files", "*.*")])
         if not path:
-            return
+            return "break"
         try:
-            with open(path, "r", encoding="utf-8") as handle:
-                content = handle.read()
-        except (OSError, UnicodeError) as exc:
+            content = read_editor_file(path)
+        except (OSError, UnicodeError, ValueError) as exc:
             self.log.insert(tk.END, "Open failed: {0}\n".format(exc))
-            return
+            return "break"
         self.current_path = path
         self.editor.delete("1.0", tk.END)
         self.editor.insert("1.0", content)
         self._refresh_editor_decorations()
         self.log.insert(tk.END, "Opened {0}\n".format(path))
+        return "break"
 
-    def _save_file(self):
+    def _save_file(self, event=None):
+        handled_via_binding = event is not None
         if not self.current_path:
-            return self._save_file_as()
+            result = self._save_file_as()
+            return "break" if handled_via_binding else result
         try:
-            with open(self.current_path, "w", encoding="utf-8") as handle:
-                handle.write(self.editor.get("1.0", "end-1c"))
+            write_editor_file(self.current_path, self.editor.get("1.0", "end-1c"))
         except (OSError, UnicodeError) as exc:
             self.log.insert(tk.END, "Save failed: {0}\n".format(exc))
-            return False
+            return "break" if handled_via_binding else False
         self.log.insert(tk.END, "Saved {0}\n".format(self.current_path))
-        return True
+        return "break" if handled_via_binding else True
 
     def _save_file_as(self):
         path = filedialog.asksaveasfilename(
@@ -462,6 +478,10 @@ class OpenSkillWindow(object):
             self.current_path = previous_path
             return False
         return True
+
+    def _close_window(self):
+        self.run_session.cleanup()
+        self.root.destroy()
 
     def _on_search(self, event=None):
         del event

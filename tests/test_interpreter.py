@@ -238,6 +238,12 @@ class EvaluatorTests(unittest.TestCase):
         """
         self.assertEqual(session.eval_text(program), "ok")
 
+    def test_for_requires_numeric_bounds(self):
+        session = SkillSession()
+        with self.assertRaises(SkillEvalError) as ctx:
+            session.eval_text('(for i "a" 3 i)')
+        self.assertIn("for range bounds must be numbers", str(ctx.exception))
+
     def test_load_relative_file(self):
         session = SkillSession()
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -246,6 +252,18 @@ class EvaluatorTests(unittest.TestCase):
                 handle.write("(setq loaded 41)\n(+ loaded 1)\n")
             value = session.load_file(path)
         self.assertEqual(value, 42)
+
+    def test_load_file_accepts_utf8_bom(self):
+        session = SkillSession()
+        with tempfile.NamedTemporaryFile("wb", suffix=".il", delete=False) as handle:
+            handle.write(b"\xef\xbb\xbf(println \"bom\")\n")
+            path = handle.name
+        try:
+            value = session.load_file(path)
+        finally:
+            os.unlink(path)
+        self.assertEqual(value, "bom")
+        self.assertEqual(session.output, ['"bom"'])
 
     def test_zero_is_truthy(self):
         session = SkillSession()
@@ -259,6 +277,20 @@ class EvaluatorTests(unittest.TestCase):
         self.assertEqual(format_value(value), "(a 3 4 5)")
         self.assertEqual(format_value(session.eval_text("(type '(1 2 3))")), "list")
         self.assertEqual(format_value(session.eval_text("(type 3)")), "integer")
+
+    def test_errset_does_not_swallow_throw(self):
+        session = SkillSession()
+        self.assertEqual(session.eval_text('(catch "done" (errset (throw "done" 42)))'), 42)
+
+    def test_errsetstring_does_not_swallow_throw(self):
+        session = SkillSession()
+        self.assertEqual(session.eval_text('(catch "done" (errsetstring "(throw \\"done\\" 42)"))'), 42)
+
+    def test_file_seek_reports_invalid_offsets_cleanly(self):
+        session = SkillSession()
+        with self.assertRaises(SkillEvalError) as ctx:
+            session.eval_text("(let ((p (outstring))) (fileSeek p (sub1 0)))")
+        self.assertIn("fileSeek failed", str(ctx.exception))
 
     def test_short_circuit_and_collection_helpers(self):
         session = SkillSession()
@@ -745,6 +777,30 @@ class EvaluatorTests(unittest.TestCase):
             ),
             "(((a b) nil) ((a) (a b)))",
         )
+
+    def test_loop_helpers_respect_iteration_limits(self):
+        session = SkillSession()
+        session.max_loop_iterations = 2
+        with self.assertRaises(SkillEvalError):
+            session.eval_text(
+                """
+                (let ((tbl (makeTable "pins" 0)))
+                  (put tbl 'a 1)
+                  (put tbl 'b 2)
+                  (put tbl 'c 3)
+                  (foreach key tbl key))
+                """
+            )
+
+        session = SkillSession()
+        session.max_loop_iterations = 1
+        with self.assertRaises(SkillEvalError):
+            session.eval_text("(exists (lambda (x) nil) '(1 2))")
+
+        session = SkillSession()
+        session.max_loop_iterations = 1
+        with self.assertRaises(SkillEvalError):
+            session.eval_text("(forall (lambda (x) t) '(1 2))")
 
     def test_random_is_not_fixed_across_new_sessions(self):
         first = SkillSession().eval_text("(random)")

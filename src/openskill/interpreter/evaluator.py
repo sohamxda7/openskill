@@ -125,6 +125,9 @@ class SkillThrow(Exception):
         self.tag = tag
         self.value = value
 
+    def __str__(self):
+        return "throw with no matching catch: tag=%s value=%s" % (format_value(self.tag), format_value(self.value))
+
 
 class Environment(object):
     def __init__(self, parent=None):
@@ -681,6 +684,7 @@ def _eval_foreach(form, env, session):
         loop_env = Environment(parent=env)
         loop_env.define(name, None)
         for key in list(values.data.keys()):
+            _consume_loop_iteration(session, "foreach")
             loop_env.set(name, _plist_key_to_value(key))
             _eval_sequence(form.items[3:], loop_env, session)
         return values
@@ -701,6 +705,8 @@ def _eval_for(form, env, session):
     name = _ensure_symbol(form.items[1])
     start = evaluate(form.items[2], env, session)
     end = evaluate(form.items[3], env, session)
+    if not (_is_numeric_value(start) and _is_numeric_value(end)):
+        raise SkillEvalError("for range bounds must be numbers", form=form)
     step = 1 if start <= end else -1
     loop_env = Environment(parent=env)
     loop_env.define(name, None)
@@ -785,6 +791,8 @@ def _eval_mprocedure(form, env):
 def _eval_errset(form, env, session):
     try:
         result = _eval_sequence(form.items[1:], env, session)
+    except SkillThrow:
+        raise
     except Exception:
         return None
     return [result]
@@ -2327,22 +2335,22 @@ def _builtin_remove_table_entry(session, *args):
 
 def _builtin_infile(session, *args):
     _require_args("infile", args, exact=1)
-    return SkillPort(open(session.resolve_existing_path(args[0]), "r"), "input")
+    return session.register_port(SkillPort(open(session.resolve_existing_path(args[0]), "r"), "input"))
 
 
 def _builtin_outfile(session, *args):
     _require_args("outfile", args, exact=1)
-    return SkillPort(open(session.resolve_path(args[0]), "w"), "output")
+    return session.register_port(SkillPort(open(session.resolve_path(args[0]), "w"), "output"))
 
 
 def _builtin_instring(session, *args):
     _require_args("instring", args, exact=1)
-    return SkillPort(io.StringIO(args[0]), "input", string_backed=True)
+    return session.register_port(SkillPort(io.StringIO(args[0]), "input", string_backed=True))
 
 
 def _builtin_outstring(session, *args):
     _require_args("outstring", args, exact=0)
-    return SkillPort(io.StringIO(), "output", string_backed=True)
+    return session.register_port(SkillPort(io.StringIO(), "output", string_backed=True))
 
 
 def _require_open_port(port, name):
@@ -2363,6 +2371,7 @@ def _builtin_close(session, *args):
     _require_args("close", args, exact=1)
     port = _require_open_port(args[0], "close")
     port.close()
+    session.unregister_port(port)
     return True
 
 
@@ -2483,8 +2492,14 @@ def _builtin_file_tell(session, *args):
 def _builtin_file_seek(session, *args):
     _require_args("fileSeek", args, exact=2)
     port = _require_open_port(args[0], "fileSeek")
-    port.handle.seek(args[1])
-    return args[1]
+    offset = args[1]
+    if not isinstance(offset, int) or isinstance(offset, bool):
+        raise SkillEvalError("fileSeek expects an integer offset")
+    try:
+        port.handle.seek(offset)
+    except (OSError, ValueError) as exc:
+        _raise_runtime_error("fileSeek", exc)
+    return offset
 
 
 def _builtin_is_file(session, *args):
@@ -2552,6 +2567,8 @@ def _builtin_errsetstring(session, *args):
     _require_args("errsetstring", args, exact=1)
     try:
         return [session.eval_text(args[0], filename="<errsetstring>")]
+    except SkillThrow:
+        raise
     except Exception:
         return None
 
@@ -2661,6 +2678,7 @@ def _builtin_exists(session, *args):
     if not isinstance(values, list):
         raise SkillEvalError("exists expects a list")
     for item in values:
+        _consume_loop_iteration(session, "exists")
         if is_truthy(_invoke_callable(session, proc, item)):
             return True
     return None
@@ -2674,6 +2692,7 @@ def _builtin_forall(session, *args):
     if not isinstance(values, list):
         raise SkillEvalError("forall expects a list")
     for item in values:
+        _consume_loop_iteration(session, "forall")
         if not is_truthy(_invoke_callable(session, proc, item)):
             return None
     return True

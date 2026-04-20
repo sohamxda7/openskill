@@ -171,8 +171,9 @@ class EditorSupportTests(unittest.TestCase):
             path = handle.name
         try:
             os.chmod(path, 0o755)
+            expected_mode = os.stat(path).st_mode & 0o777
             write_editor_file(path, "new")
-            self.assertEqual(os.stat(path).st_mode & 0o777, 0o755)
+            self.assertEqual(os.stat(path).st_mode & 0o777, expected_mode)
         finally:
             os.unlink(path)
 

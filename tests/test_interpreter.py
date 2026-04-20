@@ -802,6 +802,17 @@ class EvaluatorTests(unittest.TestCase):
         with self.assertRaises(SkillEvalError):
             session.eval_text("(forall (lambda (x) t) '(1 2))")
 
+        # special-form paths must also respect limits
+        session = SkillSession()
+        session.max_loop_iterations = 1
+        with self.assertRaises(SkillEvalError):
+            session.eval_text("(exists x '(1 2) nil)")
+
+        session = SkillSession()
+        session.max_loop_iterations = 1
+        with self.assertRaises(SkillEvalError):
+            session.eval_text("(forall x '(1 2) t)")
+
     def test_random_is_not_fixed_across_new_sessions(self):
         first = SkillSession().eval_text("(random)")
         second = SkillSession().eval_text("(random)")

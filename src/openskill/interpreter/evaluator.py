@@ -929,6 +929,7 @@ def _eval_exists_form(form, env, session):
     loop_env = Environment(parent=env)
     loop_env.define(name, None)
     for index, value in enumerate(values):
+        _consume_loop_iteration(session, "exists")
         loop_env.set(name, value)
         if is_truthy(evaluate(form.items[3], loop_env, session)):
             return values[index:]
@@ -946,6 +947,7 @@ def _eval_forall_form(form, env, session):
     loop_env = Environment(parent=env)
     loop_env.define(name, None)
     for value in values:
+        _consume_loop_iteration(session, "forall")
         loop_env.set(name, value)
         if not is_truthy(evaluate(form.items[3], loop_env, session)):
             return None

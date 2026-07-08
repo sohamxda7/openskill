@@ -101,9 +101,9 @@ class OpenSkillWindow(object):
         self.editor.insert(
             "1.0",
             "; OpenSKILL editor\n"
-            "(procedure (hello name)\n"
-            "  (println (strcat \"Hello, \" name)))\n\n"
-            "(hello \"world\")\n",
+            "procedure(hello(name)\n"
+            "  println(strcat(\"Hello, \" name)))\n\n"
+            "hello(\"world\")\n",
         )
 
         self.console = tk.Text(editor_frame, wrap="word", height=12)

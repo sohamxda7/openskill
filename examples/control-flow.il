@@ -1,11 +1,11 @@
 ; Author: Soham Sen <sensoham135@gmail.com> <sohamsen2000@outlook.com>
 
 ; Assignment, loops, and branching.
-(setq sum 0)
+sum = 0
 
-(for i 1 5
-  (setq sum (+ sum i)))
+for(i 1 5
+  sum = sum + i)
 
-(cond
-  ((> sum 10) (println (sprintf "sum=%d" sum)))
-  (t (println "unexpected")))
+cond(
+  ((sum > 10) println(sprintf("sum=%d" sum)))
+  (t println("unexpected")))

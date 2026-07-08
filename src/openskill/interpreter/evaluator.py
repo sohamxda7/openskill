@@ -2185,6 +2185,57 @@ def _builtin_rightshift(session, *args):
         _raise_runtime_error("rightshift", exc)
 
 
+def _require_int_args(name, args, exact=None, minimum=None):
+    _require_args(name, args, exact=exact, minimum=minimum)
+    for value in args:
+        if not isinstance(value, int) or isinstance(value, bool):
+            raise SkillEvalError("%s expects integer arguments" % name)
+
+
+def _builtin_bnot(session, *args):
+    _require_int_args("bnot", args, exact=1)
+    return ~args[0]
+
+
+def _builtin_band(session, *args):
+    _require_int_args("band", args, minimum=1)
+    result = args[0]
+    for value in args[1:]:
+        result &= value
+    return result
+
+
+def _builtin_bor(session, *args):
+    _require_int_args("bor", args, minimum=1)
+    result = args[0]
+    for value in args[1:]:
+        result |= value
+    return result
+
+
+def _builtin_bxor(session, *args):
+    _require_int_args("bxor", args, minimum=1)
+    result = args[0]
+    for value in args[1:]:
+        result ^= value
+    return result
+
+
+def _builtin_bnand(session, *args):
+    _require_int_args("bnand", args, exact=2)
+    return ~(args[0] & args[1])
+
+
+def _builtin_bnor(session, *args):
+    _require_int_args("bnor", args, exact=2)
+    return ~(args[0] | args[1])
+
+
+def _builtin_bxnor(session, *args):
+    _require_int_args("bxnor", args, exact=2)
+    return ~(args[0] ^ args[1])
+
+
 def _builtin_exp(session, *args):
     _require_args("exp", args, exact=1)
     return math.exp(args[0])
@@ -2859,7 +2910,9 @@ def create_global_env():
         "eq": _builtin_eq,
         "neq": _builtin_neq,
         "equal": _builtin_equal,
+        "==": _builtin_equal,
         "nequal": _builtin_nequal,
+        "!=": _builtin_nequal,
         "boundp": _builtin_boundp,
         "null": _builtin_null,
         "atom": _builtin_atom,
@@ -2928,11 +2981,27 @@ def create_global_env():
         "add1": _builtin_add1,
         "sub1": _builtin_sub1,
         "round": _builtin_round,
-        "^": _builtin_expt,
+        "**": _builtin_expt,
         "expt": _builtin_expt,
         "remainder": _builtin_remainder,
+        "<<": _builtin_leftshift,
         "leftshift": _builtin_leftshift,
+        ">>": _builtin_rightshift,
         "rightshift": _builtin_rightshift,
+        "~": _builtin_bnot,
+        "bnot": _builtin_bnot,
+        "&": _builtin_band,
+        "band": _builtin_band,
+        "~&": _builtin_bnand,
+        "bnand": _builtin_bnand,
+        "^": _builtin_bxor,
+        "bxor": _builtin_bxor,
+        "~^": _builtin_bxnor,
+        "bxnor": _builtin_bxnor,
+        "|": _builtin_bor,
+        "bor": _builtin_bor,
+        "~|": _builtin_bnor,
+        "bnor": _builtin_bnor,
         "exp": _builtin_exp,
         "log": _builtin_log,
         "sqrt": _builtin_sqrt,

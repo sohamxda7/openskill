@@ -75,7 +75,7 @@ class ParserTests(unittest.TestCase):
         )
 
     def test_lexes_tight_operator_syntax(self):
-        tokens = tokenize("fib(n-1) x<y+z A*x1+B*y1+C != 0.0 a%b c^d first_10_values", filename="sample.il")
+        tokens = tokenize("fib(n-1) x<y+z A*x1+B*y1+C != 0.0 a%b c**d e^f first_10_values", filename="sample.il")
         self.assertEqual(
             [token.text for token in tokens[:-1]],
             [
@@ -105,8 +105,11 @@ class ParserTests(unittest.TestCase):
                 "%",
                 "b",
                 "c",
-                "^",
+                "**",
                 "d",
+                "e",
+                "^",
+                "f",
                 "first_10_values",
             ],
         )
@@ -156,7 +159,7 @@ class ParserTests(unittest.TestCase):
         self.assertEqual([item.name for item in multiply.items[1:]], ["b", "c"])
 
     def test_rewrites_mod_power_with_precedence(self):
-        forms = parse("a % b ^ c ^ d", filename="sample.il")
+        forms = parse("a % b ** c ** d", filename="sample.il")
         self.assertEqual(forms[0].items[0].name, "mod")
         self.assertEqual(forms[0].items[1].name, "a")
         power = forms[0].items[2]
@@ -165,6 +168,22 @@ class ParserTests(unittest.TestCase):
         nested_power = power.items[2]
         self.assertEqual(nested_power.items[0].name, "expt")
         self.assertEqual([item.name for item in nested_power.items[1:]], ["c", "d"])
+
+    def test_rewrites_bitwise_operators(self):
+        forms = parse("~a & b | c ^ d << e >> f", filename="sample.il")
+        self.assertEqual(forms[0].items[0].name, "bor")
+        band = forms[0].items[1]
+        self.assertEqual(band.items[0].name, "band")
+        self.assertEqual(band.items[1].items[0].name, "bnot")
+        self.assertEqual(band.items[2].name, "b")
+        xor = forms[0].items[2]
+        self.assertEqual(xor.items[0].name, "bxor")
+        self.assertEqual(xor.items[1].name, "c")
+        shift = xor.items[2]
+        self.assertEqual(shift.items[0].name, "rightshift")
+        left_shift = shift.items[1]
+        self.assertEqual(left_shift.items[0].name, "leftshift")
+        self.assertEqual(left_shift.items[1].name, "d")
 
     def test_rewrites_infix_comparisons_inside_if(self):
         forms = parse('if(a < b + c then println("x") else println("y"))', filename="sample.il")
@@ -501,14 +520,30 @@ class EvaluatorTests(unittest.TestCase):
             first_10_values = 99
             list(
               a%b
-              a^c
-              b^c^2
+              a**c
+              b**c**2
               first_10_values
               (% a b)
-              (^ b c))
+              (** b c))
             """
         )
         self.assertEqual(format_value(value), "(2 100 256 99 2 16)")
+
+    def test_bitwise_operators_match_cadence_surface(self):
+        session = SkillSession()
+        value = session.eval_text(
+            """
+            list(
+              6^3
+              6 & 3
+              6 | 3
+              8 << 2
+              8 >> 1
+              ~0
+              bxor(6 3))
+            """
+        )
+        self.assertEqual(format_value(value), "(5 2 7 32 4 -1 5)")
 
     def test_recursive_calls_work_without_if_special_form(self):
         session = SkillSession()

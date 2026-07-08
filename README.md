@@ -114,7 +114,7 @@ scripts/         Packaging helpers
 
 ```bash
 openskill [path/to/script.il]
-openskill --expr '(println "hello")'
+openskill --expr 'println("hello")'
 openskill --gui
 ```
 

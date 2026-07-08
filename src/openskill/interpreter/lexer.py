@@ -22,7 +22,7 @@ def _is_identifier_letter(char):
 
 def _is_arithmetic_operator(source, index):
     char = source[index]
-    if char in "+*/%^":
+    if char in "+*/%&|^~":
         return True
     if char != "-":
         return False
@@ -36,7 +36,10 @@ def _is_arithmetic_operator(source, index):
 
 
 def _starts_multi_char_operator(source, index):
-    return any(source.startswith(operator, index) for operator in ("&&", "||", "==", "!=", "<=", ">=", "->"))
+    return any(
+        source.startswith(operator, index)
+        for operator in ("&&", "||", "==", "!=", "<=", ">=", "->", "**", "<<", ">>", "~&", "~|", "~^")
+    )
 
 
 def tokenize(source, filename="<string>"):
@@ -148,6 +151,12 @@ def tokenize(source, filename="<string>"):
             ("<=", "SYMBOL"),
             (">=", "SYMBOL"),
             ("->", "ARROW"),
+            ("**", "SYMBOL"),
+            ("<<", "SYMBOL"),
+            (">>", "SYMBOL"),
+            ("~&", "SYMBOL"),
+            ("~|", "SYMBOL"),
+            ("~^", "SYMBOL"),
         ):
             if source.startswith(operator, index):
                 tokens.append(Token(kind, operator, line, column, filename))

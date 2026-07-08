@@ -49,19 +49,27 @@ class Parser(object):
     INFIX_PRECEDENCE = {
         "=": 10,
         "||": 15,
+        "|": 17,
+        "~|": 17,
         "&&": 20,
+        "&": 22,
+        "~&": 22,
+        "^": 24,
+        "~^": 24,
         "==": 30,
         "!=": 30,
         "<": 30,
         "<=": 30,
         ">": 30,
         ">=": 30,
+        "<<": 35,
+        ">>": 35,
         "+": 40,
         "-": 40,
         "*": 50,
         "/": 50,
         "%": 50,
-        "^": 60,
+        "**": 60,
     }
     PREFIX_PRECEDENCE = 60
 
@@ -106,12 +114,12 @@ class Parser(object):
             if precedence < minimum_precedence:
                 return left
             self.consume()
-            right = self.parse_expression(precedence if operator.text in ("=", "^") else precedence + 1)
+            right = self.parse_expression(precedence if operator.text in ("=", "**") else precedence + 1)
             left = self._rewrite_infix(operator, left, right)
 
     def parse_prefix(self):
         token = self.peek()
-        if token.kind in ("SYMBOL", "OPERATOR") and token.text in ("!", "-") and self._is_attached_prefix_operator(token):
+        if token.kind in ("SYMBOL", "OPERATOR") and token.text in ("!", "-", "~") and self._is_attached_prefix_operator(token):
             operator = self.consume()
             value = self.parse_expression(self.PREFIX_PRECEDENCE)
             return self._rewrite_prefix(operator, value)
@@ -279,12 +287,13 @@ class Parser(object):
 
     def _starts_attached_prefix_group(self):
         token = self.peek()
-        return token.kind in ("SYMBOL", "OPERATOR") and token.text in ("!", "-") and self._is_attached_prefix_operator(token)
+        return token.kind in ("SYMBOL", "OPERATOR") and token.text in ("!", "-", "~") and self._is_attached_prefix_operator(token)
 
     def _rewrite_prefix(self, operator, value):
         symbol_name = {
             "!": "not",
             "-": "difference",
+            "~": "bnot",
         }[operator.text]
         symbol = SymbolForm(symbol_name, operator.line, operator.column, operator.filename)
         return ListForm([symbol, value], operator.line, operator.column, operator.filename)
@@ -319,7 +328,15 @@ class Parser(object):
                 "*": "times",
                 "/": "quotient",
                 "%": "mod",
-                "^": "expt",
+                "**": "expt",
+                "<<": "leftshift",
+                ">>": "rightshift",
+                "&": "band",
+                "~&": "bnand",
+                "^": "bxor",
+                "~^": "bxnor",
+                "|": "bor",
+                "~|": "bnor",
             }[operator.text]
             args = [left, right]
         symbol = SymbolForm(symbol_name, operator.line, operator.column, operator.filename)

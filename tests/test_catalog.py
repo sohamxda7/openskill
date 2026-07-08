@@ -45,7 +45,9 @@ SPECIAL_FORMS = {
     "errset",
     "while",
     "and",
+    "&&",
     "or",
+    "||",
     "exists",
     "forall",
     "->",
@@ -236,7 +238,27 @@ class CatalogTests(unittest.TestCase):
             "times",
             "quotient",
             "%",
+            "**",
             "^",
+            "<<",
+            ">>",
+            "&",
+            "|",
+            "~",
+            "~&",
+            "~|",
+            "~^",
+            "==",
+            "!=",
+            "&&",
+            "||",
+            "bnot",
+            "band",
+            "bor",
+            "bxor",
+            "bnand",
+            "bnor",
+            "bxnor",
             "warn",
             "error",
             "errset",
@@ -249,7 +271,7 @@ class CatalogTests(unittest.TestCase):
     def test_catalog_has_only_list_remd(self):
         entries = [entry for entry in load_index() if entry["symbol"] == "remd"]
         self.assertEqual(len(entries), 1)
-        self.assertEqual(entries[0]["signature"], "(remd item list)")
+        self.assertEqual(entries[0]["signature"], "remd(item list)")
 
     def test_search_uses_catalog_as_single_source_of_truth(self):
         results = search("quasiquote")

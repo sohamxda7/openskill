@@ -27,13 +27,17 @@ class EditorSupportTests(unittest.TestCase):
     def test_extract_user_symbols_finds_procedures_macros_and_classes(self):
         source = """
         (procedure (hello name) (println name))
+        procedure(greet(name) println(name))
         (defun add2 (x) (+ x 2))
+        defun(add3 (x) x + 3)
         (defmacro unlessNil (value form) `(when ,value ,form))
+        defmacro(whenReady (form) `(when ready ,form))
         (defclass point () ((x @initarg ?x)))
+        defclass(rect () ((w @initarg ?w)))
         """
         self.assertEqual(
             extract_user_symbols(source),
-            ["add2", "hello", "point", "unlessNil"],
+            ["add2", "add3", "greet", "hello", "point", "rect", "unlessNil", "whenReady"],
         )
 
     def test_symbol_fragment_bounds_tracks_symbol_under_cursor(self):
@@ -42,12 +46,12 @@ class EditorSupportTests(unittest.TestCase):
         self.assertEqual((start, end, fragment), (9, 19, "helloWorld"))
 
     def test_completion_candidates_merge_catalog_and_user_symbols(self):
-        source = "(procedure (helloWorld name) name)\n(defun helperFn (x) x)"
+        source = "procedure(helloWorld(name) name)\ndefun(helperFn (x) x)"
         matches = completion_candidates("he", ["help", "when", "hello"], source, limit=10)
         self.assertEqual(matches[:4], ["hello", "helloWorld", "help", "helperFn"])
 
     def test_editor_symbols_include_syntax_markers(self):
-        source = "(procedure (helloWorld name) name)"
+        source = "procedure(helloWorld(name) name)"
         symbols = editor_symbols(["println"], source)
         self.assertIn("println", symbols)
         self.assertIn("helloWorld", symbols)
@@ -56,7 +60,7 @@ class EditorSupportTests(unittest.TestCase):
         self.assertIn("->=", symbols)
 
     def test_syntax_highlight_ranges_cover_catalog_syntax_and_user_symbols(self):
-        source = 'if(a < 1 then println("skip") else helperFn(a))\n(procedure (helperFn value) value)'
+        source = 'if(a < 1 then println("skip") else helperFn(a))\nprocedure(helperFn(value) value)'
         ranges = syntax_highlight_ranges(source, ["if", "<", "println"], source)
         highlighted = [token for _, _, token in ranges]
         self.assertIn("if", highlighted)
@@ -71,7 +75,7 @@ class EditorSupportTests(unittest.TestCase):
         self.assertEqual(syntax_highlight_ranges('"', ["println"], '"'), [])
 
     def test_syntax_highlight_ranges_keep_valid_prefix_on_partial_error(self):
-        source = '(procedure (helperFn value) value)\n"unterminated'
+        source = 'procedure(helperFn(value) value)\n"unterminated'
         ranges = syntax_highlight_ranges(source, ["procedure"], source)
         highlighted = [token for _, _, token in ranges]
         self.assertIn("procedure", highlighted)

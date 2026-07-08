@@ -18,6 +18,9 @@ BRACKET_PALETTE = (
 _DEFINITION_PATTERNS = (
     re.compile(r"\((?:procedure|nprocedure|mprocedure)\s*\(\s*([^\s()]+)"),
     re.compile(r"\((?:defun|defmacro|defclass)\s+([^\s()]+)"),
+    re.compile(r"\b(?:procedure|nprocedure|mprocedure)\s*\(\s*([^\s()]+)\s*\("),
+    re.compile(r"\b(?:defun|defmacro)\s*\(\s*([^\s()]+)\s+\("),
+    re.compile(r"\bdefclass\s*\(\s*([^\s()]+)"),
 )
 _SYMBOL_DELIMITERS = set("()[]{}'\"`;,\t\r\n ")
 _EDITOR_MARKERS = frozenset(

@@ -72,7 +72,7 @@ openskill
 Evaluate one expression:
 
 ```bash
-openskill --expr '(+ 1 2 3)'
+openskill --expr '1 + 2 + 3'
 ```
 
 Run a script file:
@@ -102,7 +102,7 @@ openskill path/to/script.il
 Use `--expr` for quick checks:
 
 ```bash
-openskill --expr '(let ((x 2) (y 5)) (+ x y))'
+openskill --expr 'let(((x 2) (y 5)) x + y)'
 ```
 
 ### REPL
@@ -184,12 +184,14 @@ PYTHONPATH=src python3 -m openskill.cli examples/arithmetic.il
 
 ## 6. Language model: how SKILL code is read here
 
-OpenSKILL reads code as expressions. Most code is written as parenthesized prefix forms:
+OpenSKILL reads code as expressions. The recommended user-facing style is Cadence SKILL algebraic notation: infix operators for operators, and immediate-paren calls for functions and special forms.
 
 ```skill
-(+ 1 2 3)
-(setq width 10)
-(if (> width 5) "wide" "narrow")
+1 + 2 + 3
+width = 10
+if(width > 5 then "wide" else "narrow")
+println("hello world")
+plus(1 2 3)
 ```
 
 Operator-style expressions can also be written in classic SKILL form:
@@ -198,20 +200,21 @@ Operator-style expressions can also be written in classic SKILL form:
 width * height
 sum + 1
 total / 4
-count % 2
-side ^ 2
+mod(count 2)
+side ** 2
+mask ^ selectMask
 if(count <= limit && !done then println("go") else println("stop"))
 ```
 
-OpenSKILL accepts the common SKILL operator surface for arithmetic, comparison, equality, assignment, and boolean conditions, including tight forms such as `fib(n-1)`, `count%2`, `side^2`, and `x<y+z`. Underscores remain part of symbol names, so `first_10_values` is one variable name rather than three variables joined by an operator.
+OpenSKILL accepts the common SKILL operator surface for arithmetic, comparison, equality, assignment, boolean conditions, shifts, and bitwise operations. Tight forms such as `fib(n-1)`, `side**2`, `a%b`, and `x<y+z` parse without whitespace. Prefer `mod(count 2)` in examples; `%` remains available as compatibility syntax. `**` is exponentiation, while `^` is bitwise exclusive OR. Underscores remain part of symbol names, so `first_10_values` is one variable name rather than three variables joined by an operator.
 
-Classic SKILL immediate-paren calls are also accepted when the `(` touches the symbol with no whitespace:
+Function calls use immediate parentheses when the `(` touches the symbol with no whitespace:
 
 ```skill
-println("hello world")
-plus(1 2)
 let(((x 1) (y 2)) plus(x y))
 ```
+
+Prefix list calls such as `(+ 1 2)` and `(plus 1 2)` remain accepted for compatibility, but the API Finder, command reference, and starter examples prefer algebraic notation.
 
 OpenSKILL also accepts `name = expr` as a compatibility rewrite for assignment, and `obj->slot` / `obj->slot = value` for the currently supported slot-access surface.
 
@@ -223,7 +226,7 @@ A semicolon starts a comment that continues to the end of the line:
 
 ```skill
 ; this is a comment
-(setq x 10) ; so is this
+x = 10 ; so is this
 ```
 
 ### Basic data types you will use first
@@ -231,11 +234,11 @@ A semicolon starts a comment that continues to the end of the line:
 - numbers: `1`, `-3`, `4.5`
 - strings: `"hello"`
 - symbols: `width`, `sum`, `myProc`
-- lists: `'(a b c)` or `(list 1 2 3)`
+- lists: `'(a b c)` or `list(1 2 3)`
 
 ### Truth values
 
-OpenSKILL follows the classic Lisp-style rule used by SKILL:
+OpenSKILL follows the classic SKILL truth rule:
 
 - `nil` means false
 - `t` means true
@@ -245,7 +248,7 @@ OpenSKILL follows the classic Lisp-style rule used by SKILL:
 So this returns `1`, not `2`:
 
 ```skill
-(if 0 1 2)
+if(0 then 1 else 2)
 ```
 
 ## 7. Syntax primer
@@ -266,7 +269,7 @@ Without quote, a symbol is treated as a variable or function name.
 Use backquote to build list-shaped data while evaluating selected parts:
 
 ```skill
-`(a ,(+ 1 2) ,@(list 4 5))
+`(a ,(1 + 2) ,@list(4 5))
 ```
 
 That produces:
@@ -284,21 +287,21 @@ Strings use double quotes. Common escapes such as `\n`, `\r`, `\t`, `\"`, and `\
 Use `let` for temporary local bindings:
 
 ```skill
-(let ((x 2) (y 5))
-  (+ x y))
+let(((x 2) (y 5))
+  x + y)
 ```
 
-Use `setq` for assignment in the active session:
+Use assignment syntax for values in the active session. `setq(total 0)` is also accepted.
 
 ```skill
-(setq total 0)
+total = 0
 ```
 
 Define callable code with `procedure`, `defun`, or `lambda`:
 
 ```skill
-(procedure (greet who)
-  (println (strcat "Hello, " who)))
+procedure(greet(who)
+  println(strcat("Hello, " who)))
 ```
 
 ### Question-mark names and parameter keywords
@@ -306,16 +309,16 @@ Define callable code with `procedure`, `defun`, or `lambda`:
 Names like `?x` are accepted as symbols, so code such as this works:
 
 ```skill
-(progn
-  (setq ?x 5)
-  (+ ?x 1))
+progn(
+  ?x = 5
+  ?x + 1)
 ```
 
 The current object layer also uses `?name` forms as initarg keys for `makeInstance`:
 
 ```skill
-(defclass point () ((x @initarg ?x @initform 0)))
-(makeInstance 'point ?x 7)
+defclass(point () ((x @initarg ?x @initform 0)))
+makeInstance('point ?x 7)
 ```
 
 Outside APIs that explicitly consume them, `?name` values still behave like ordinary symbol names.
@@ -325,10 +328,10 @@ Outside APIs that explicitly consume them, `?name` values still behave like ordi
 ### Conditionals
 
 ```skill
-(if test then else)
-(when test body1 body2)
-(unless test body1 body2)
-(cond
+if(test then trueExpr else falseExpr)
+when(test body1 body2)
+unless(test body1 body2)
+cond(
   (test1 body1)
   (test2 body2)
   (t fallback))
@@ -337,51 +340,51 @@ Outside APIs that explicitly consume them, `?name` values still behave like ordi
 ### Loops
 
 ```skill
-(for i 1 3
-  (println i))
+for(i 1 3
+  println(i))
 
-(foreach item '(a b c)
-  (println item))
+foreach(item '(a b c)
+  println(item))
 
-(while (< count 3)
-  (setq count (+ count 1)))
+while(count < 3
+  count = count + 1)
 ```
 
 `foreach` can also walk table keys in insertion order:
 
 ```skill
-(foreach key tbl
-  (println (list key (get tbl key))))
+foreach(key tbl
+  println(list(key get(tbl key))))
 ```
 
 ### Lists
 
 ```skill
-(list 1 2 3)
-(reverse '(1 2 3))
-(append1 '(1 2) 3)
-(nth 1 '(10 20 30))
+list(1 2 3)
+reverse('(1 2 3))
+append1('(1 2) 3)
+nth(1 '(10 20 30))
 ```
 
 ### Strings and formatting
 
 ```skill
-(sprintf "v=%d" 7)
-(strcat "pin_" 'A)
-(strlen "hello")
+sprintf("v=%d" 7)
+strcat("pin_" 'A)
+strlen("hello")
 ```
 
 ### Tables
 
 ```skill
-(let ((tbl (makeTable "pins" 0)))
-  (put tbl 'vin 1)
-  (put tbl 'vout 2)
-  (println (getTableKeys tbl))
-  (println (tableToList tbl))
-  (removeTableEntry tbl 'vin)
-  (foreach key tbl
-    (println (list key (get tbl key)))))
+let(((tbl makeTable("pins" 0)))
+  put(tbl 'vin 1)
+  put(tbl 'vout 2)
+  println(getTableKeys(tbl))
+  println(tableToList(tbl))
+  removeTableEntry(tbl 'vin)
+  foreach(key tbl
+    println(list(key get(tbl key)))))
 ```
 
 Current table helpers include:
@@ -398,12 +401,12 @@ Current table helpers include:
 OpenSKILL now includes a small SKILL++-style object layer for common teaching and experimentation cases:
 
 ```skill
-(defclass point () ((x @initarg ?x @initform 0)
-                    (y @initarg ?y @initform 0)))
+defclass(point () ((x @initarg ?x @initform 0)
+                   (y @initarg ?y @initform 0)))
 
-(let ((p (makeInstance 'point ?x 3)))
+let(((p makeInstance('point ?x 3)))
   p->y = 9
-  (list p->x p->y))
+  list(p->x p->y))
 ```
 
 Current scope:
@@ -423,7 +426,7 @@ Current limits:
 ### Loading code from another file
 
 ```skill
-(load "other-file.il")
+load("other-file.il")
 ```
 
 Use this when you split larger programs across files.
@@ -435,11 +438,11 @@ OpenSKILL includes `defmacro`, `quote`, `quasiquote`, `unquote`, and `splice`, s
 Example:
 
 ```skill
-(defmacro unlessNil (value form)
+defmacro(unlessNil (value form)
   `(when ,value ,form))
 
-(unlessNil "ok"
-  (println "ran"))
+unlessNil("ok"
+  println("ran"))
 ```
 
 Practical advice:

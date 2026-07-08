@@ -203,10 +203,11 @@ total / 4
 mod(count 2)
 side ** 2
 mask ^ selectMask
+1:3
 if(count <= limit && !done then println("go") else println("stop"))
 ```
 
-OpenSKILL accepts the common SKILL operator surface for arithmetic, comparison, equality, assignment, boolean conditions, shifts, and bitwise operations. Tight forms such as `fib(n-1)`, `side**2`, `a%b`, and `x<y+z` parse without whitespace. Prefer `mod(count 2)` in examples; `%` remains available as compatibility syntax. `**` is exponentiation, while `^` is bitwise exclusive OR. Underscores remain part of symbol names, so `first_10_values` is one variable name rather than three variables joined by an operator.
+OpenSKILL accepts the common SKILL operator surface for arithmetic, comparison, equality, assignment, boolean conditions, shifts, bitwise operations, and simple ranges. Tight forms such as `fib(n-1)`, `side**2`, `a%b`, `x<y+z`, and `1:3` parse without whitespace. Prefer `mod(count 2)` in examples; `%` remains available as compatibility syntax. `**` is exponentiation, while `^` is bitwise exclusive OR. Named comparison functions such as `lessp`, `leqp`, `greaterp`, and `geqp` are also available. Underscores remain part of symbol names, so `first_10_values` is one variable name rather than three variables joined by an operator.
 
 Function calls use immediate parentheses when the `(` touches the symbol with no whitespace:
 
@@ -509,5 +510,7 @@ OpenSKILL already covers a useful standalone subset, but the command surface is 
 - [`docs/command-reference.md`](command-reference.md)
 
 The current object model is intentionally small: use it for `defclass`, `makeInstance`, slot defaults, and `->` access, but do not expect full SKILL++ method or metaobject coverage yet.
+
+The current operator model covers the documented standalone subset in the API catalog. Cadence operators that require deeper database/object or l-value handling, such as bracket array/bitfield syntax, dot and `~>` access, pre/post increment and decrement, and in-place assignments like `+=`, are not implemented yet.
 
 That keeps your scripts aligned with what this repository actually implements today.

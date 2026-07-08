@@ -182,6 +182,11 @@ def tokenize(source, filename="<string>"):
             index += 1
             column += 1
             continue
+        if char == ":":
+            tokens.append(Token("SYMBOL", ":", line, column, filename))
+            index += 1
+            column += 1
+            continue
         if char == "!":
             tokens.append(Token("SYMBOL", "!", line, column, filename))
             index += 1
@@ -194,7 +199,7 @@ def tokenize(source, filename="<string>"):
                 break
             if _is_arithmetic_operator(source, index):
                 break
-            if source[index] in "!<>":
+            if source[index] in "!<>:":
                 break
             if source[index] == "=" and source[index - 1] not in "<>":
                 break

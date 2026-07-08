@@ -48,14 +48,15 @@ BUILTIN_CALL_HEADS = set(create_global_env().values.keys()) | {
 class Parser(object):
     INFIX_PRECEDENCE = {
         "=": 10,
+        ":": 12,
         "||": 15,
+        "&&": 16,
         "|": 17,
         "~|": 17,
-        "&&": 20,
-        "&": 22,
-        "~&": 22,
-        "^": 24,
-        "~^": 24,
+        "^": 18,
+        "~^": 18,
+        "&": 19,
+        "~&": 19,
         "==": 30,
         "!=": 30,
         "<": 30,
@@ -316,6 +317,7 @@ class Parser(object):
         else:
             symbol_name = {
                 "||": "or",
+                ":": "range",
                 "==": "equal",
                 "!=": "nequal",
                 "<": "<",

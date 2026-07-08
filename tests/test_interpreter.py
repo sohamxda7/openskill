@@ -75,7 +75,7 @@ class ParserTests(unittest.TestCase):
         )
 
     def test_lexes_tight_operator_syntax(self):
-        tokens = tokenize("fib(n-1) x<y+z A*x1+B*y1+C != 0.0 a%b c**d e^f first_10_values", filename="sample.il")
+        tokens = tokenize("fib(n-1) x<y+z A*x1+B*y1+C != 0.0 a%b c**d e^f r:s first_10_values", filename="sample.il")
         self.assertEqual(
             [token.text for token in tokens[:-1]],
             [
@@ -110,6 +110,9 @@ class ParserTests(unittest.TestCase):
                 "e",
                 "^",
                 "f",
+                "r",
+                ":",
+                "s",
                 "first_10_values",
             ],
         )
@@ -184,6 +187,32 @@ class ParserTests(unittest.TestCase):
         left_shift = shift.items[1]
         self.assertEqual(left_shift.items[0].name, "leftshift")
         self.assertEqual(left_shift.items[1].name, "d")
+
+    def test_rewrites_bitwise_precedence_before_logical(self):
+        forms = parse("a & b ^ c | d && e || f", filename="sample.il")
+        self.assertEqual(forms[0].items[0].name, "or")
+        and_form = forms[0].items[1]
+        self.assertEqual(and_form.items[0].name, "and")
+        bor = and_form.items[1]
+        self.assertEqual(bor.items[0].name, "bor")
+        bxor = bor.items[1]
+        self.assertEqual(bxor.items[0].name, "bxor")
+        band = bxor.items[1]
+        self.assertEqual(band.items[0].name, "band")
+        self.assertEqual([item.name for item in band.items[1:]], ["a", "b"])
+        self.assertEqual(bxor.items[2].name, "c")
+        self.assertEqual(bor.items[2].name, "d")
+        self.assertEqual(and_form.items[2].name, "e")
+        self.assertEqual(forms[0].items[2].name, "f")
+
+    def test_rewrites_range_between_logical_and_assignment(self):
+        forms = parse("pair = 1:2 || fallback", filename="sample.il")
+        self.assertEqual(forms[0].items[0].name, "setq")
+        range_form = forms[0].items[2]
+        self.assertEqual(range_form.items[0].name, "range")
+        self.assertEqual(range_form.items[1].value, 1)
+        or_form = range_form.items[2]
+        self.assertEqual(or_form.items[0].name, "or")
 
     def test_rewrites_infix_comparisons_inside_if(self):
         forms = parse('if(a < b + c then println("x") else println("y"))', filename="sample.il")
@@ -544,6 +573,28 @@ class EvaluatorTests(unittest.TestCase):
             """
         )
         self.assertEqual(format_value(value), "(5 2 7 32 4 -1 5)")
+        self.assertEqual(session.eval_text("-8 >> 1"), 2147483644)
+
+    def test_bitwise_operator_precedence_matches_cadence_order(self):
+        session = SkillSession()
+        self.assertEqual(session.eval_text("1 | 2 && 4"), 4)
+        self.assertEqual(session.eval_text("1 | (2 && 4)"), 5)
+        self.assertEqual(session.eval_text("7 & 3 ^ 1 | 8"), 10)
+
+    def test_named_comparison_aliases_and_range_operator(self):
+        session = SkillSession()
+        value = session.eval_text(
+            """
+            list(
+              lessp(1 2)
+              leqp(2 2)
+              greaterp(3 2)
+              geqp(3 3)
+              !nil
+              1:3)
+            """
+        )
+        self.assertEqual(format_value(value), "(t t t t t (1 3))")
 
     def test_recursive_calls_work_without_if_special_form(self):
         session = SkillSession()
@@ -1003,6 +1054,10 @@ class EvaluatorTests(unittest.TestCase):
         self.assertEqual(session.eval_text("(remainder -7 3)"), -1)
         self.assertEqual(session.eval_text("(leftshift 3 2)"), 12)
         self.assertEqual(session.eval_text("(rightshift 12 2)"), 3)
+        with self.assertRaises(SkillEvalError):
+            session.eval_text("(leftshift 3 -1)")
+        with self.assertRaises(SkillEvalError):
+            session.eval_text("(rightshift 3 -1)")
         self.assertEqual(format_value(session.eval_text("(ncons 5)")), "(5)")
         self.assertEqual(format_value(session.eval_text("(xcons '(2 3) 1)")), "(1 2 3)")
         self.assertTrue(session.eval_text("(pairp '(1 2))"))

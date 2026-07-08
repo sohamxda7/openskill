@@ -2169,20 +2169,25 @@ def _builtin_remainder(session, *args):
     return value
 
 
+def _builtin_range(session, *args):
+    _require_args("range", args, exact=2)
+    return [args[0], args[1]]
+
+
 def _builtin_leftshift(session, *args):
-    _require_args("leftshift", args, exact=2)
-    try:
-        return args[0] << args[1]
-    except TypeError as exc:
-        _raise_runtime_error("leftshift", exc)
+    _require_int_args("leftshift", args, exact=2)
+    value, count = args
+    if count < 0:
+        raise SkillEvalError("leftshift expects a non-negative shift count")
+    return value << count
 
 
 def _builtin_rightshift(session, *args):
-    _require_args("rightshift", args, exact=2)
-    try:
-        return args[0] >> args[1]
-    except TypeError as exc:
-        _raise_runtime_error("rightshift", exc)
+    _require_int_args("rightshift", args, exact=2)
+    value, count = args
+    if count < 0:
+        raise SkillEvalError("rightshift expects a non-negative shift count")
+    return (value & 0xFFFFFFFF) >> count
 
 
 def _require_int_args(name, args, exact=None, minimum=None):
@@ -2844,6 +2849,7 @@ def create_global_env():
         "+": _builtin_plus,
         "plus": _builtin_plus,
         "-": _builtin_minus,
+        "minus": _builtin_minus,
         "difference": _builtin_minus,
         "*": _builtin_multiply,
         "times": _builtin_multiply,
@@ -2945,9 +2951,14 @@ def create_global_env():
         "sortcar": _builtin_sortcar,
         "=": _builtin_compare("="),
         "<": _builtin_compare("<"),
+        "lessp": _builtin_compare("<"),
         "<=": _builtin_compare("<="),
+        "leqp": _builtin_compare("<="),
         ">": _builtin_compare(">"),
+        "greaterp": _builtin_compare(">"),
         ">=": _builtin_compare(">="),
+        "geqp": _builtin_compare(">="),
+        "!": _builtin_not,
         "not": _builtin_not,
         "print": _builtin_print,
         "println": _builtin_println,
@@ -2984,6 +2995,8 @@ def create_global_env():
         "**": _builtin_expt,
         "expt": _builtin_expt,
         "remainder": _builtin_remainder,
+        ":": _builtin_range,
+        "range": _builtin_range,
         "<<": _builtin_leftshift,
         "leftshift": _builtin_leftshift,
         ">>": _builtin_rightshift,

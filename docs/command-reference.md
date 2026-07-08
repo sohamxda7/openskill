@@ -15,8 +15,8 @@ Use `openskill api find QUERY` or `:api QUERY` in the REPL when you want to sear
 | `+` | `left + right` | `1 + 2 + 3` | Add numbers together. |
 | `-` | `left - right or -value` | `10 - 3 - 2` | Subtract numbers or negate one value. |
 | `/` | `left / right` | `20 / 5` | Divide numbers from left to right. |
-| `<<` | `value << count` | `3 << 2` | Shift an integer left by a bit count. |
-| `>>` | `value >> count` | `12 >> 2` | Shift an integer right by a bit count. |
+| `<<` | `value << count` | `3 << 2` | Logically shift an integer left by a bit count, zero-filling vacated bits. |
+| `>>` | `value >> count` | `12 >> 2` | Logically shift a 32-bit integer word right by a bit count, zero-filling vacated bits. |
 | `^` | `left ^ right` | `6 ^ 3` | Compute bitwise exclusive OR across integer values. |
 | `abs` | `abs(number)` | `abs(-7)` | Return the absolute value of a number. |
 | `acos` | `acos(number)` | `acos(1)` | Return the inverse cosine of a value in range. |
@@ -36,16 +36,17 @@ Use `openskill api find QUERY` or `:api QUERY` in the REPL when you want to sear
 | `expt` | `expt(base power)` | `2 ** 5` | Raise a number to a power; the infix operator form is base ** power. |
 | `fix` | `fix(number)` | `fix(3.7)` | Convert a number to an integer by truncation. |
 | `float` | `float(number)` | `float(3)` | Convert a number to floating-point. |
-| `leftshift` | `leftshift(value count)` | `3 << 2` | Shift an integer left by a bit count. |
+| `leftshift` | `leftshift(value count)` | `3 << 2` | Logically shift an integer left by a bit count, zero-filling vacated bits. |
 | `log` | `log(number)` | `log(1)` | Return the natural logarithm of a positive number. |
 | `max` | `max(number ...)` | `max(7 2 5)` | Return the largest numeric argument. |
 | `min` | `min(number ...)` | `min(7 2 5)` | Return the smallest numeric argument. |
+| `minus` | `minus(number ...)` | `minus(10 3 2)` | Subtract numbers or negate one value. |
 | `mod` | `mod(left right)` | `mod(10 3)` | Compute the remainder from integer-style division. |
 | `plus` | `plus(number ...)` | `1 + 2 + 3` | Add numbers together. |
 | `quotient` | `quotient(number ...)` | `8 / 2` | Divide numbers from left to right. |
 | `random` | `random([limit])` | `random(10)` | Return a pseudo-random float or an integer below a supplied limit. |
 | `remainder` | `remainder(left right)` | `remainder(-7 3)` | Return the truncated-division remainder, preserving the dividend sign. |
-| `rightshift` | `rightshift(value count)` | `12 >> 2` | Shift an integer right by a bit count. |
+| `rightshift` | `rightshift(value count)` | `12 >> 2` | Logically shift a 32-bit integer word right by a bit count, zero-filling vacated bits. |
 | `round` | `round(number)` | `round(2.6)` | Round a number to the nearest integer. |
 | `sin` | `sin(number)` | `sin(0)` | Return the sine of an angle in radians. |
 | `sqrt` | `sqrt(number)` | `sqrt(9)` | Return the square root of a non-negative number. |
@@ -83,6 +84,10 @@ Use `openskill api find QUERY` or `:api QUERY` in the REPL when you want to sear
 | `==` | `left == right` | `3 == 3` | Compare two values structurally using infix equality syntax. |
 | `>` | `left > right` | `3 > 2 > 1` | Check for strictly decreasing numeric order. |
 | `>=` | `left >= right` | `3 >= 3 >= 1` | Check for nonincreasing numeric order. |
+| `geqp` | `geqp(left right ...)` | `geqp(3 3 1)` | Check for nonincreasing numeric order. |
+| `greaterp` | `greaterp(left right ...)` | `greaterp(3 2 1)` | Check for strictly decreasing numeric order. |
+| `leqp` | `leqp(left right ...)` | `leqp(1 1 2)` | Check for nondecreasing numeric order. |
+| `lessp` | `lessp(left right ...)` | `lessp(1 2 3)` | Check for strictly increasing numeric order. |
 
 ## Conditional
 | Symbol | Signature | Example | Summary |
@@ -256,6 +261,7 @@ Use `openskill api find QUERY` or `:api QUERY` in the REPL when you want to sear
 ## Predicate
 | Symbol | Signature | Example | Summary |
 | --- | --- | --- | --- |
+| `!` | `!expr` | `!nil` | Invert SKILL truthiness using unary null-operator syntax. |
 | `arrayp` | `arrayp(value)` | `arrayp(array(3 0))` | Test whether a value is an array. |
 | `atom` | `atom(value)` | `atom('a)` | Test whether a value is not a list. |
 | `boundp` | `boundp('symbol)` | `boundp('ready)` | Check whether a quoted symbol currently has a bound value. |
@@ -299,6 +305,12 @@ Use `openskill api find QUERY` or `:api QUERY` in the REPL when you want to sear
 | `putpropqq` | `putpropqq('symbol value key)` | `putpropqq('chip 10 'width)` | Store one property value on a symbol. |
 | `remprop` | `remprop('symbol key)` | `remprop('chip 'width)` | Remove one property from a symbol plist. |
 | `setplist` | `setplist('symbol plist)` | `setplist('chip '(width 10 height 20))` | Replace the entire property list for a symbol. |
+
+## Range
+| Symbol | Signature | Example | Summary |
+| --- | --- | --- | --- |
+| `:` | `left : right` | `1:3` | Build a two-element range list from two evaluated values. |
+| `range` | `range(left right)` | `range(1 3)` | Build a two-element range list from two evaluated values. |
 
 ## Reader
 | Symbol | Signature | Example | Summary |

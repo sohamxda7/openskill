@@ -198,10 +198,12 @@ Operator-style expressions can also be written in classic SKILL form:
 width * height
 sum + 1
 total / 4
+count % 2
+side ^ 2
 if(count <= limit && !done then println("go") else println("stop"))
 ```
 
-OpenSKILL accepts the common SKILL operator surface for arithmetic, comparison, equality, assignment, and boolean conditions, including tight forms such as `fib(n-1)` and `x<y+z`.
+OpenSKILL accepts the common SKILL operator surface for arithmetic, comparison, equality, assignment, and boolean conditions, including tight forms such as `fib(n-1)`, `count%2`, `side^2`, and `x<y+z`. Underscores remain part of symbol names, so `first_10_values` is one variable name rather than three variables joined by an operator.
 
 Classic SKILL immediate-paren calls are also accepted when the `(` touches the symbol with no whitespace:
 

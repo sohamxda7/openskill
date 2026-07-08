@@ -58,6 +58,8 @@
   {"symbol": "-", "kind": "arithmetic", "signature": "(- number ...)", "summary": "Subtract numbers or negate one value.", "returns": "A numeric difference", "example": "(- 10 3 2)", "tags": ["math", "arithmetic"]},
   {"symbol": "*", "kind": "arithmetic", "signature": "(* number ...)", "summary": "Multiply numbers together.", "returns": "A numeric product", "example": "(* 2 3 4)", "tags": ["math", "arithmetic"]},
   {"symbol": "/", "kind": "arithmetic", "signature": "(/ number ...)", "summary": "Divide numbers from left to right.", "returns": "A numeric quotient", "example": "(/ 20 5)", "tags": ["math", "arithmetic"]},
+  {"symbol": "%", "kind": "arithmetic", "signature": "(% left right)", "summary": "Compute the remainder from integer-style division.", "returns": "A numeric remainder", "example": "(% 10 3)", "tags": ["math", "arithmetic"]},
+  {"symbol": "^", "kind": "arithmetic", "signature": "(^ base power)", "summary": "Raise a number to a power.", "returns": "A numeric result", "example": "(^ 2 5)", "tags": ["math", "arithmetic"]},
   {"symbol": "mod", "kind": "arithmetic", "signature": "(mod left right)", "summary": "Compute the remainder from integer-style division.", "returns": "A numeric remainder", "example": "(mod 10 3)", "tags": ["math", "arithmetic"]},
   {"symbol": "abs", "kind": "arithmetic", "signature": "(abs number)", "summary": "Return the absolute value of a number.", "returns": "A non-negative number", "example": "(abs -7)", "tags": ["math", "arithmetic"]},
   {"symbol": "min", "kind": "arithmetic", "signature": "(min number ...)", "summary": "Return the smallest numeric argument.", "returns": "The minimum value", "example": "(min 7 2 5)", "tags": ["math", "arithmetic"]},

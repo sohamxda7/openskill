@@ -22,7 +22,7 @@ def _is_identifier_letter(char):
 
 def _is_arithmetic_operator(source, index):
     char = source[index]
-    if char in "+*/":
+    if char in "+*/%^":
         return True
     if char != "-":
         return False

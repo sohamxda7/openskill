@@ -11,6 +11,8 @@ Use `openskill api find QUERY` or `:api QUERY` in the REPL when you want to sear
 | `+` | `(+ number ...)` | Add numbers together. |
 | `-` | `(- number ...)` | Subtract numbers or negate one value. |
 | `/` | `(/ number ...)` | Divide numbers from left to right. |
+| `%` | `(% left right)` | Compute the remainder from integer-style division. |
+| `^` | `(^ base power)` | Raise a number to a power. |
 | `abs` | `(abs number)` | Return the absolute value of a number. |
 | `acos` | `(acos number)` | Return the inverse cosine of a value in range. |
 | `add1` | `(add1 number)` | Increment a number by one. |

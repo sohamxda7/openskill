@@ -60,6 +60,8 @@ class Parser(object):
         "-": 40,
         "*": 50,
         "/": 50,
+        "%": 50,
+        "^": 60,
     }
     PREFIX_PRECEDENCE = 60
 
@@ -104,7 +106,7 @@ class Parser(object):
             if precedence < minimum_precedence:
                 return left
             self.consume()
-            right = self.parse_expression(precedence if operator.text == "=" else precedence + 1)
+            right = self.parse_expression(precedence if operator.text in ("=", "^") else precedence + 1)
             left = self._rewrite_infix(operator, left, right)
 
     def parse_prefix(self):
@@ -316,6 +318,8 @@ class Parser(object):
                 "-": "difference",
                 "*": "times",
                 "/": "quotient",
+                "%": "mod",
+                "^": "expt",
             }[operator.text]
             args = [left, right]
         symbol = SymbolForm(symbol_name, operator.line, operator.column, operator.filename)

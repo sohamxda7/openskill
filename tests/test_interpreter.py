@@ -75,10 +75,40 @@ class ParserTests(unittest.TestCase):
         )
 
     def test_lexes_tight_operator_syntax(self):
-        tokens = tokenize("fib(n-1) x<y+z A*x1+B*y1+C != 0.0", filename="sample.il")
+        tokens = tokenize("fib(n-1) x<y+z A*x1+B*y1+C != 0.0 a%b c^d first_10_values", filename="sample.il")
         self.assertEqual(
             [token.text for token in tokens[:-1]],
-            ["fib", "(", "n", "-", "1", ")", "x", "<", "y", "+", "z", "A", "*", "x1", "+", "B", "*", "y1", "+", "C", "!=", "0.0"],
+            [
+                "fib",
+                "(",
+                "n",
+                "-",
+                "1",
+                ")",
+                "x",
+                "<",
+                "y",
+                "+",
+                "z",
+                "A",
+                "*",
+                "x1",
+                "+",
+                "B",
+                "*",
+                "y1",
+                "+",
+                "C",
+                "!=",
+                "0.0",
+                "a",
+                "%",
+                "b",
+                "c",
+                "^",
+                "d",
+                "first_10_values",
+            ],
         )
 
     def test_lexes_arrow_slot_access(self):
@@ -124,6 +154,17 @@ class ParserTests(unittest.TestCase):
         multiply = forms[0].items[2]
         self.assertEqual(multiply.items[0].name, "times")
         self.assertEqual([item.name for item in multiply.items[1:]], ["b", "c"])
+
+    def test_rewrites_mod_power_with_precedence(self):
+        forms = parse("a % b ^ c ^ d", filename="sample.il")
+        self.assertEqual(forms[0].items[0].name, "mod")
+        self.assertEqual(forms[0].items[1].name, "a")
+        power = forms[0].items[2]
+        self.assertEqual(power.items[0].name, "expt")
+        self.assertEqual(power.items[1].name, "b")
+        nested_power = power.items[2]
+        self.assertEqual(nested_power.items[0].name, "expt")
+        self.assertEqual([item.name for item in nested_power.items[1:]], ["c", "d"])
 
     def test_rewrites_infix_comparisons_inside_if(self):
         forms = parse('if(a < b + c then println("x") else println("y"))', filename="sample.il")
@@ -449,6 +490,41 @@ class EvaluatorTests(unittest.TestCase):
             """
         )
         self.assertEqual(format_value(value), "(3 triangle nonzero)")
+
+    def test_tight_mod_power_and_underscore_symbols(self):
+        session = SkillSession()
+        value = session.eval_text(
+            """
+            a = 10
+            b = 4
+            c = 2
+            first_10_values = 99
+            list(
+              a%b
+              a^c
+              b^c^2
+              first_10_values
+              (% a b)
+              (^ b c))
+            """
+        )
+        self.assertEqual(format_value(value), "(2 100 256 99 2 16)")
+
+    def test_recursive_calls_work_without_if_special_form(self):
+        session = SkillSession()
+        value = session.eval_text(
+            """
+            procedure(factCond(n)
+              cond(((n <= 1) 1)
+                   (t n * factCond(n-1))))
+            procedure(sumWhen(n)
+              prog(()
+                when(n <= 0 return(0))
+                return(n + sumWhen(n-1))))
+            list(factCond(5) sumWhen(5))
+            """
+        )
+        self.assertEqual(format_value(value), "(120 15)")
 
     def test_cond_and_defun(self):
         session = SkillSession()

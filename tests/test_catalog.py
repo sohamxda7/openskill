@@ -235,6 +235,8 @@ class CatalogTests(unittest.TestCase):
             "difference",
             "times",
             "quotient",
+            "%",
+            "^",
             "warn",
             "error",
             "errset",

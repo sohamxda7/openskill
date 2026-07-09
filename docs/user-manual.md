@@ -1,4 +1,5 @@
-<!-- Author: Soham Sen <sensoham135@gmail.com> <sohamsen2000@outlook.com> -->
+<!-- Author: Soham Sen <sensoham135@gmail.com> -->
+<!-- Repository: https://github.com/sohamxda7/openskill -->
 
 # OpenSKILL User Manual
 
@@ -14,6 +15,11 @@ OpenSKILL is a standalone workbench for writing and running a practical subset o
 - an offline API catalog backed by `src/openskill/api/catalog.json`
 
 It is useful for learning SKILL syntax, prototyping standalone scripts, and looking up supported commands locally.
+
+Project attribution:
+
+- Author: Soham Sen <sensoham135@gmail.com>
+- Repository: <https://github.com/sohamxda7/openskill>
 
 OpenSKILL executes local file operations with your current user permissions. Run only trusted SKILL scripts, especially when they use file or directory APIs.
 
@@ -87,6 +93,12 @@ Check the local environment:
 openskill doctor
 ```
 
+Show project author and repository metadata:
+
+```bash
+openskill about
+```
+
 ## 4. Ways to use OpenSKILL
 
 ### Script runner
@@ -117,6 +129,7 @@ openskill repl
 Useful REPL commands:
 
 - `:help` - show built-in help
+- `:about` - show author and repository information
 - `:quit` - leave the REPL
 - `:api QUERY` - search the offline catalog from inside the REPL
 - `:reset` - create a fresh session and clear current REPL state
@@ -153,6 +166,7 @@ The desktop shell includes:
 - command/procedure autocomplete in the editor with `Tab` or `Ctrl+Space`
 - a console pane for output and errors
 - a REPL tab for line-by-line evaluation
+- an About tab and Help menu entries for the author and repository link
 - an API Finder panel for local command lookup
 
 ## 5. Runnable starter examples
@@ -475,6 +489,22 @@ See [`docs/command-reference.md`](command-reference.md), which is organized from
 
 If you want the raw source of truth used by the finder, inspect `src/openskill/api/catalog.json`.
 
+### 4. Check project attribution
+
+From the command line, run:
+
+```bash
+openskill about
+```
+
+Inside the REPL, use:
+
+```text
+:about
+```
+
+Inside the IDE, open the **About** tab or use **Help > About OpenSKILL**.
+
 The catalog examples are written to run as standalone snippets, and the test suite executes every documented example entry.
 
 ## 11. Desktop shell quick walkthrough
@@ -487,7 +517,8 @@ When you open the GUI:
 4. Click **Run** to evaluate the full editor buffer.
 5. Use the lower console pane to read results or errors.
 6. Switch to the **REPL** tab for quick single-line experiments.
-7. Use **API Finder** on the right to search symbols, signatures, summaries, return shapes, and examples.
+7. Open the **About** tab or **Help > About OpenSKILL** to see the author and repository link.
+8. Use **API Finder** on the right to search symbols, signatures, summaries, return shapes, and examples.
 
 The GUI is best for learning and experimentation. The CLI is usually faster for automation and script runs.
 

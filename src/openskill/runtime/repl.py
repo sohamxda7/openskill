@@ -1,7 +1,10 @@
-# Author: Soham Sen <sensoham135@gmail.com> <sohamsen2000@outlook.com>
+# Author: Soham Sen <sensoham135@gmail.com>
+# Repository: https://github.com/sohamxda7/openskill
 
 from __future__ import print_function
 
+from openskill import __version__
+from openskill._metadata import PROJECT_AUTHOR, PROJECT_REPOSITORY_URL, about_text
 from openskill.apifinder.index import search
 from openskill.interpreter.errors import SkillSyntaxError
 from openskill.interpreter.lexer import tokenize
@@ -10,6 +13,7 @@ from openskill.interpreter.runtime import SkillSession, format_value
 
 HELP_TEXT = """Commands:
   :help              Show this message
+  :about             Show author and repository information
   :quit              Exit the REPL
   :api QUERY         Search the offline API index
   :reset             Reset the session
@@ -26,6 +30,8 @@ def start_repl(input_stream=None, output_stream=None, session=None):
     paren_balance = 0
 
     output_stream.write("OpenSKILL bootstrap REPL\n")
+    output_stream.write("Author: %s\n" % PROJECT_AUTHOR)
+    output_stream.write("Repository: %s\n" % PROJECT_REPOSITORY_URL)
     output_stream.write("Type :help for commands.\n")
     output_stream.flush()
 
@@ -55,6 +61,10 @@ def start_repl(input_stream=None, output_stream=None, session=None):
             return 0
         if not buffer_lines and line == ":help":
             output_stream.write(HELP_TEXT)
+            output_stream.flush()
+            continue
+        if not buffer_lines and line == ":about":
+            output_stream.write(about_text(__version__) + "\n")
             output_stream.flush()
             continue
         if not buffer_lines and line == ":reset":

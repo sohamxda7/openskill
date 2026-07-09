@@ -1,4 +1,5 @@
-<!-- Author: Soham Sen <sensoham135@gmail.com> <sohamsen2000@outlook.com> -->
+<!-- Author: Soham Sen <sensoham135@gmail.com> -->
+<!-- Repository: https://github.com/sohamxda7/openskill -->
 
 # OpenSKILL Command Reference
 This reference is a browsable snapshot of the offline catalog used by the CLI, REPL, and GUI API finder. It is generated from `src/openskill/api/catalog.json`.

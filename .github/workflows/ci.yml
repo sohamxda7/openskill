@@ -1,4 +1,5 @@
-# Author: Soham Sen <sensoham135@gmail.com> <sohamsen2000@outlook.com>
+# Author: Soham Sen <sensoham135@gmail.com>
+# Repository: https://github.com/sohamxda7/openskill
 
 name: CI
 
@@ -50,6 +51,7 @@ jobs:
       - name: CLI smoke tests
         run: |
           python -m openskill --help
+          python -m openskill about
           python -m openskill doctor
           python -m openskill api find procedure
           python -m openskill --expr "(apply + 1 '(2 3 4))"

@@ -1,11 +1,13 @@
-# Author: Soham Sen <sensoham135@gmail.com> <sohamsen2000@outlook.com>
+# Author: Soham Sen <sensoham135@gmail.com>
+# Repository: https://github.com/sohamxda7/openskill
 
 import argparse
 import os
 import sys
 
-from openskill.apifinder.index import load_index, search
 from openskill import __version__
+from openskill._metadata import PROJECT_AUTHOR, PROJECT_REPOSITORY_URL, about_text
+from openskill.apifinder.index import load_index, search
 from openskill.interpreter.errors import SkillError
 from openskill.interpreter.runtime import SkillSession, format_value
 from openskill.runtime.repl import start_repl
@@ -47,9 +49,16 @@ def _doctor():
         gui_ready = "no"
     print("OpenSKILL doctor")
     print("version: %s" % __version__)
+    print("author: %s" % PROJECT_AUTHOR)
+    print("repository: %s" % PROJECT_REPOSITORY_URL)
     print("cwd: %s" % os.getcwd())
     print("api_entries: %s" % entries)
     print("gui_available: %s" % gui_ready)
+    return 0
+
+
+def _about():
+    print(about_text(__version__))
     return 0
 
 
@@ -74,6 +83,8 @@ def _run_cli_action(action):
 def main(argv=None):
     argv = argv or sys.argv[1:]
     if argv:
+        if argv[0] in ("about", "--about", "--version", "-V"):
+            return _about()
         if argv[0] == "doctor":
             return _doctor()
         if argv[0] == "api":
@@ -92,7 +103,20 @@ def main(argv=None):
         action="store_true",
         help="Launch the desktop shell",
     )
+    parser.add_argument(
+        "--about",
+        action="store_true",
+        help="Show project author and repository information",
+    )
+    parser.add_argument(
+        "--version",
+        action="store_true",
+        help="Show version, author, and repository information",
+    )
     args = parser.parse_args(argv)
+
+    if args.about or args.version:
+        return _about()
 
     if args.gui:
         return _launch_gui()

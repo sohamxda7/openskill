@@ -1,8 +1,17 @@
-# Author: Soham Sen <sensoham135@gmail.com> <sohamsen2000@outlook.com>
+# Author: Soham Sen <sensoham135@gmail.com>
+# Repository: https://github.com/sohamxda7/openskill
 
 import tkinter as tk
-from tkinter import filedialog, ttk
+import webbrowser
+from tkinter import filedialog, messagebox, ttk
 
+from openskill import __version__
+from openskill._metadata import (
+    PROJECT_AUTHOR,
+    PROJECT_NAME,
+    PROJECT_REPOSITORY_URL,
+    about_text,
+)
 from openskill.apifinder.index import load_index, search
 from openskill.ide.editor_support import (
     BRACKET_PALETTE,
@@ -48,6 +57,10 @@ class OpenSkillWindow(object):
         file_menu.add_command(label="Save", command=self._save_file)
         file_menu.add_command(label="Save As", command=self._save_file_as)
         menubar.add_cascade(label="File", menu=file_menu)
+        help_menu = tk.Menu(menubar, tearoff=False)
+        help_menu.add_command(label="Open Repository", command=self._open_repository)
+        help_menu.add_command(label="About OpenSKILL", command=self._show_about)
+        menubar.add_cascade(label="Help", menu=help_menu)
         self.root.config(menu=menubar)
 
         toolbar = ttk.Frame(self.root, padding=8)
@@ -119,6 +132,26 @@ class OpenSkillWindow(object):
         repl_entry.grid(row=1, column=0, sticky="ew", pady=(8, 0))
         repl_entry.bind("<Return>", self._run_repl_line)
         notebook.add(repl_frame, text="REPL")
+
+        about_frame = ttk.Frame(notebook, padding=16)
+        about_frame.columnconfigure(1, weight=1)
+        ttk.Label(about_frame, text=PROJECT_NAME, font=("TkDefaultFont", 14, "bold")).grid(
+            row=0, column=0, columnspan=2, sticky="w", pady=(0, 12)
+        )
+        ttk.Label(about_frame, text="Author").grid(row=1, column=0, sticky="w", padx=(0, 12), pady=4)
+        ttk.Label(about_frame, text=PROJECT_AUTHOR).grid(row=1, column=1, sticky="w", pady=4)
+        ttk.Label(about_frame, text="Repository").grid(row=2, column=0, sticky="w", padx=(0, 12), pady=4)
+        repo_link = ttk.Label(
+            about_frame,
+            text=PROJECT_REPOSITORY_URL,
+            foreground="#1f5fbf",
+            cursor="hand2",
+        )
+        repo_link.grid(row=2, column=1, sticky="w", pady=4)
+        repo_link.bind("<Button-1>", self._open_repository)
+        ttk.Label(about_frame, text="Version").grid(row=3, column=0, sticky="w", padx=(0, 12), pady=4)
+        ttk.Label(about_frame, text=__version__).grid(row=3, column=1, sticky="w", pady=4)
+        notebook.add(about_frame, text="About")
 
         side_frame = ttk.Frame(self.root)
         side_frame.grid(row=1, column=1, sticky="nsew", padx=(4, 8), pady=(0, 8))
@@ -482,6 +515,14 @@ class OpenSkillWindow(object):
     def _close_window(self):
         self.run_session.cleanup()
         self.root.destroy()
+
+    def _open_repository(self, event=None):
+        del event
+        webbrowser.open_new_tab(PROJECT_REPOSITORY_URL)
+        return "break"
+
+    def _show_about(self):
+        messagebox.showinfo("About OpenSKILL", about_text(__version__))
 
     def _on_search(self, event=None):
         del event

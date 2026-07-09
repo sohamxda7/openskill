@@ -1,4 +1,5 @@
-<!-- Author: Soham Sen <sensoham135@gmail.com> <sohamsen2000@outlook.com> -->
+<!-- Author: Soham Sen <sensoham135@gmail.com> -->
+<!-- Repository: https://github.com/sohamxda7/openskill -->
 
 # OpenSKILL - Run, Learn, and Explore SKILL Without Cadence Installed
 
@@ -9,6 +10,12 @@ It gives EDA engineers, custom IC teams, chip design learners, and student-frien
 If you are searching for a **SKILL interpreter**, **SKILL REPL**, **offline SKILL reference**, or a **Cadence-free** way to **learn SKILL** for **custom IC** and broader EDA workflows, this repository is built for that use case.
 
 OpenSKILL runs local file I/O with your current user permissions, so treat SKILL files like normal local scripts and run only code you trust.
+
+## Project links
+
+- **Author:** Soham Sen <sensoham135@gmail.com>
+- **Repository:** <https://github.com/sohamxda7/openskill>
+- **Releases:** <https://github.com/sohamxda7/openskill/releases>
 
 ## New users start here
 
@@ -115,6 +122,7 @@ scripts/         Packaging helpers
 ```bash
 openskill [path/to/script.il]
 openskill --expr 'println("hello")'
+openskill about
 openskill --gui
 ```
 

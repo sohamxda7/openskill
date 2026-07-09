@@ -1,4 +1,5 @@
-; Author: Soham Sen <sensoham135@gmail.com> <sohamsen2000@outlook.com>
+; Author: Soham Sen <sensoham135@gmail.com>
+; Repository: https://github.com/sohamxda7/openskill
 
 ; Build a Fibonacci series with a procedure, a loop, and list growth.
 procedure(fibonacciSeries(count)

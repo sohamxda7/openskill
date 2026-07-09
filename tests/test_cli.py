@@ -1,4 +1,5 @@
-# Author: Soham Sen <sensoham135@gmail.com> <sohamsen2000@outlook.com>
+# Author: Soham Sen <sensoham135@gmail.com>
+# Repository: https://github.com/sohamxda7/openskill
 
 import contextlib
 import io
@@ -11,6 +12,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
+from openskill._metadata import PROJECT_AUTHOR, PROJECT_REPOSITORY_URL
 from openskill.apifinder.index import load_index, search
 from openskill.cli import main
 from openskill.runtime.repl import start_repl
@@ -35,8 +37,22 @@ class ApiFinderTests(unittest.TestCase):
 
 class CliTests(unittest.TestCase):
     def test_doctor_command(self):
-        code = main(["doctor"])
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            code = main(["doctor"])
         self.assertEqual(code, 0)
+        rendered = stdout.getvalue()
+        self.assertIn(PROJECT_AUTHOR, rendered)
+        self.assertIn(PROJECT_REPOSITORY_URL, rendered)
+
+    def test_about_command(self):
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            code = main(["about"])
+        self.assertEqual(code, 0)
+        rendered = stdout.getvalue()
+        self.assertIn(PROJECT_AUTHOR, rendered)
+        self.assertIn(PROJECT_REPOSITORY_URL, rendered)
 
     def test_api_find_command(self):
         code = main(["api", "find", "when"])
@@ -92,7 +108,18 @@ class ReplTests(unittest.TestCase):
         output_stream = io.StringIO()
         code = start_repl(input_stream=input_stream, output_stream=output_stream)
         self.assertEqual(code, 0)
-        self.assertIn("OpenSKILL bootstrap REPL", output_stream.getvalue())
+        rendered = output_stream.getvalue()
+        self.assertIn("OpenSKILL bootstrap REPL", rendered)
+        self.assertIn(PROJECT_AUTHOR, rendered)
+
+    def test_repl_about_command(self):
+        input_stream = io.StringIO(":about\n:quit\n")
+        output_stream = io.StringIO()
+        code = start_repl(input_stream=input_stream, output_stream=output_stream)
+        self.assertEqual(code, 0)
+        rendered = output_stream.getvalue()
+        self.assertIn(PROJECT_AUTHOR, rendered)
+        self.assertIn(PROJECT_REPOSITORY_URL, rendered)
 
     def test_repl_does_not_double_echo_println(self):
         input_stream = io.StringIO('(println "hello")\n:quit\n')
